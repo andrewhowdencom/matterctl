@@ -1,0 +1,23 @@
+[Unit]
+Description=matterctl browser interface
+Wants=network-online.target
+After=network-online.target
+
+[Container]
+ContainerName=matterctl
+Image=localhost/matterctl:latest
+Pull=never
+Network=host
+ReadOnly=true
+NoNewPrivileges=true
+DropCapability=all
+Environment=MATTERCTL_HTTP_ADDRESS=:8081
+Exec=serve
+
+[Service]
+Restart=on-failure
+TimeoutStartSec=120
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target
