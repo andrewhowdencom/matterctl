@@ -21,8 +21,14 @@ import (
 )
 
 type options struct {
-	matter api.InfoSource
-	tracer trace.Tracer
+	matter    api.InfoSource
+	devices   api.DeviceSource
+	heartbeat time.Duration
+	tracer    trace.Tracer
+}
+
+func WithDevices(source api.DeviceSource) Option {
+	return func(o *options) { o.devices = source }
 }
 
 type Option func(*options)
@@ -45,7 +51,7 @@ func Run(ctx context.Context, address string, logger *slog.Logger, opts ...Optio
 }
 
 func handler(logger *slog.Logger, opts ...Option) http.Handler {
-	options := options{tracer: otel.Tracer("github.com/andrewhowdencom/matterctl/internal/server")}
+	options := options{tracer: otel.Tracer("github.com/andrewhowdencom/matterctl/internal/server"), heartbeat: 15 * time.Second}
 	for _, option := range opts {
 		option(&options)
 	}
@@ -97,6 +103,7 @@ func handler(logger *slog.Logger, opts ...Option) http.Handler {
 			logger.Debug("write server information response", "error", err)
 		}
 	})
+	addDeviceRoutes(mux, options, logger)
 	return mux
 }
 

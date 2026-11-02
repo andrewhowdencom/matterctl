@@ -1,0 +1,60 @@
+# Inspect devices and watch changes
+
+With the matterctl service running, list its commissioned devices:
+
+```sh
+matterctl device list
+matterctl device list --output json
+```
+
+Use `./bin/matterctl` for a local development build. From another LAN machine,
+add `--server.url http://192.168.86.33:8081`, replacing the address as needed.
+The CLI always queries matterctl's HTTP API.
+
+The list shows node and endpoint IDs, Matter labels, last reported availability,
+advertised power capabilities, and known power state. A synchronized empty
+inventory is a successful result; the CLI does not discover uncommissioned
+devices or import Google Home devices automatically.
+
+Inspect a decimal node ID or an unambiguous Matter label:
+
+```sh
+matterctl device inspect 12
+matterctl device inspect "Couch lamp"
+matterctl device inspect "Couch lamp" --output json
+```
+
+Inspection shows every observed endpoint on the node, its parent when known,
+device types, server and client clusters, command metadata, features, and
+selected state. A light can accept OnOff commands on a server cluster; a switch
+with an OnOff client cluster sends commands and does not gain power controls
+merely from that cluster's presence. `accepted_commands: null` means unknown,
+while `[]` means the server advertised no accepted commands.
+
+Matter labels can differ from Google Home nicknames. Duplicate labels across
+nodes are rejected; use the node ID to disambiguate. An endpoint label selects
+its containing node for inspection. User-defined aliases and endpoint-specific
+control arrive in later phases.
+
+Watch live changes:
+
+```sh
+matterctl event watch
+matterctl event watch --device "Couch lamp"
+matterctl event watch --output json
+```
+
+The first event contains an inventory snapshot. A device filter selects one
+node, including all its endpoints. JSON mode writes one complete JSON object
+per line, suitable for scripts; text mode suppresses heartbeat messages. Press
+Ctrl-C to stop normally.
+
+During an upstream disconnection, the stream reports connection changes. It
+receives a replacement inventory after reconnect. `device list` returns a
+nonzero exit with `ready: false` and the last cached snapshot until synchronization
+finishes; `device inspect` does not resolve targets from stale data.
+
+If a stream reports interruption, restart `event watch` to obtain a new
+snapshot. Events are live notifications, not a durable history or guaranteed
+replay of every physical button press. See the [reference](../reference/devices.md)
+for filtering, state freshness, and stream limits.

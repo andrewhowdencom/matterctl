@@ -94,6 +94,20 @@ func writeResult(ctx context.Context, conn *websocket.Conn, id string, result an
 	return wsjson.Write(ctx, conn, map[string]any{"message_id": id, "result": result})
 }
 
+func readApplicationRequest(ctx context.Context, conn *websocket.Conn, request *testRequest) error {
+	for {
+		if err := wsjson.Read(ctx, conn, request); err != nil {
+			return err
+		}
+		if request.Command != "start_listening" {
+			return nil
+		}
+		if err := writeResult(ctx, conn, request.MessageID, []node{}); err != nil {
+			return err
+		}
+	}
+}
+
 func TestServerInfoRoundTrip(t *testing.T) {
 	address := peer(t, func(ctx context.Context, conn *websocket.Conn) {
 		if err := wsjson.Write(ctx, conn, testInfo()); err != nil {
@@ -101,7 +115,7 @@ func TestServerInfoRoundTrip(t *testing.T) {
 		}
 		for {
 			var request testRequest
-			if err := wsjson.Read(ctx, conn, &request); err != nil {
+			if err := readApplicationRequest(ctx, conn, &request); err != nil {
 				return
 			}
 			if request.Command != "server_info" || request.MessageID == "" {
@@ -137,11 +151,11 @@ func TestConcurrentCallsCorrelateOutOfOrderReplies(t *testing.T) {
 		}
 		requests := make([]testRequest, count)
 		for i := range requests {
-			if err := wsjson.Read(ctx, conn, &requests[i]); err != nil {
+			if err := readApplicationRequest(ctx, conn, &requests[i]); err != nil {
 				return
 			}
 		}
-		if err := wsjson.Write(ctx, conn, map[string]any{"event": "attribute_updated", "data": []any{1, "1/6/0", true}}); err != nil {
+		if err := wsjson.Write(ctx, conn, map[string]any{"event": "unknown_event", "data": []any{1, "1/6/0", true}}); err != nil {
 			return
 		}
 		if err := writeResult(ctx, conn, "unknown-request", nil); err != nil {
@@ -153,7 +167,7 @@ func TestConcurrentCallsCorrelateOutOfOrderReplies(t *testing.T) {
 			}
 		}
 		var ignored testRequest
-		_ = wsjson.Read(ctx, conn, &ignored)
+		_ = readApplicationRequest(ctx, conn, &ignored)
 	})
 	c, _, _ := runClient(t, address)
 	waitStatus(t, c, connected)
@@ -184,7 +198,7 @@ func TestCanceledCallDoesNotCancelSessionOrAnotherRequest(t *testing.T) {
 		var slowID string
 		for {
 			var request testRequest
-			if err := wsjson.Read(ctx, conn, &request); err != nil {
+			if err := readApplicationRequest(ctx, conn, &request); err != nil {
 				return
 			}
 			if request.Command == "slow" {
@@ -252,7 +266,7 @@ func TestDisconnectFailsPendingCallAndReconnectDoesNotReplay(t *testing.T) {
 		}
 		for {
 			var request testRequest
-			if err := wsjson.Read(ctx, conn, &request); err != nil {
+			if err := readApplicationRequest(ctx, conn, &request); err != nil {
 				return
 			}
 			requests.Add(1)
@@ -310,7 +324,7 @@ func TestRequestDeadlineAndShutdown(t *testing.T) {
 		}
 		for {
 			var request testRequest
-			if err := wsjson.Read(ctx, conn, &request); err != nil {
+			if err := readApplicationRequest(ctx, conn, &request); err != nil {
 				return
 			}
 			requestSeen <- struct{}{}
@@ -356,7 +370,7 @@ func TestUpstreamErrorDoesNotExposeDetails(t *testing.T) {
 			return
 		}
 		var request testRequest
-		if err := wsjson.Read(ctx, conn, &request); err != nil {
+		if err := readApplicationRequest(ctx, conn, &request); err != nil {
 			return
 		}
 		if err := wsjson.Write(ctx, conn, map[string]any{
@@ -365,7 +379,7 @@ func TestUpstreamErrorDoesNotExposeDetails(t *testing.T) {
 		}); err != nil {
 			return
 		}
-		_ = wsjson.Read(ctx, conn, &request)
+		_ = readApplicationRequest(ctx, conn, &request)
 	})
 	c, _, _ := runClient(t, address)
 	waitStatus(t, c, connected)

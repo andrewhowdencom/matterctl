@@ -30,15 +30,21 @@ const (
 )
 
 type Client struct {
-	url     string
-	logger  *slog.Logger
-	tracer  trace.Tracer
-	mu      sync.Mutex
-	current *session
-	status  api.ServerStatus
-	serial  uint64
+	url         string
+	logger      *slog.Logger
+	tracer      trace.Tracer
+	mu          sync.Mutex
+	current     *session
+	status      api.ServerStatus
+	serial      uint64
+	nodes       map[api.NodeID]node
+	ready       bool
+	observedAt  time.Time
+	watchers    map[uint64]watcher
+	watchSerial uint64
 
 	connectTimeout time.Duration
+	syncTimeout    time.Duration
 	requestTimeout time.Duration
 	retryMin       time.Duration
 	retryMax       time.Duration
@@ -60,6 +66,8 @@ func New(address string, logger *slog.Logger, options ...Option) (*Client, error
 		tracer:         otel.Tracer("github.com/andrewhowdencom/matterctl/internal/matter"),
 		status:         api.ServerStatus{Connection: api.Connection{State: "disconnected"}},
 		connectTimeout: 5 * time.Second, requestTimeout: 2 * time.Second,
+		syncTimeout: 10 * time.Second,
+		nodes:       make(map[api.NodeID]node), watchers: make(map[uint64]watcher),
 		retryMin: 250 * time.Millisecond, retryMax: 30 * time.Second,
 	}
 	for _, option := range options {
@@ -94,6 +102,12 @@ func (c *Client) Run(ctx context.Context) {
 		delay = min(delay*2, c.retryMax)
 	}
 	c.setDisconnected("disconnected", "")
+	c.mu.Lock()
+	for key, w := range c.watchers {
+		delete(c.watchers, key)
+		close(w.ch)
+	}
+	c.mu.Unlock()
 	c.logger.Info("Matter Server connection stopped")
 }
 
@@ -129,21 +143,36 @@ func (c *Client) connect(ctx context.Context) (bool, string, string) {
 	}
 	span.End()
 	s := &session{conn: conn, done: make(chan struct{}), pending: make(map[string]chan reply)}
+	syncCtx, syncCancel := context.WithTimeout(ctx, c.syncTimeout)
+	defer syncCancel()
+	_, syncSpan := c.tracer.Start(syncCtx, "matter.start_listening", trace.WithSpanKind(trace.SpanKindClient))
+	defer syncSpan.End()
+	c.mu.Lock()
+	c.serial++
+	s.snapshotID = strconv.FormatUint(c.serial, 10)
+	c.mu.Unlock()
+	if err := wsjson.Write(syncCtx, conn, map[string]string{"message_id": s.snapshotID, "command": "start_listening"}); err != nil {
+		syncSpan.SetStatus(codes.Error, "inventory subscription failed")
+		return false, "disconnected", "inventory subscription failed"
+	}
 	now := time.Now().UTC()
 	c.mu.Lock()
 	c.current = s
+	c.ready = false
 	c.status = api.ServerStatus{Connection: api.Connection{State: "connected", ConnectedAt: &now}, Server: &info}
 	c.mu.Unlock()
 	c.logger.Info("Matter Server connected", "schema", info.SchemaVersion)
 	// Only this goroutine reads the socket; individual RPC deadlines cannot
 	// cancel the reader or discard unrelated in-flight responses.
-	s.read(ctx)
+	reason := s.read(ctx, syncCtx, c, syncSpan)
 	c.mu.Lock()
+	synchronized := c.ready
 	c.current = nil
-	c.status = api.ServerStatus{Connection: api.Connection{State: "disconnected", LastError: "connection closed"}}
+	c.ready = false
+	c.status = api.ServerStatus{Connection: api.Connection{State: "disconnected", LastError: reason}}
 	close(s.done)
 	c.mu.Unlock()
-	return true, "disconnected", "connection closed"
+	return synchronized, "disconnected", reason
 }
 
 func validateInfo(info api.ServerInfo) error {
@@ -160,6 +189,11 @@ func (c *Client) setDisconnected(state, reason string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.status = api.ServerStatus{Connection: api.Connection{State: state, LastError: reason}}
+	c.ready = false
+	c.publishLocked(newEvent("connection", "", struct {
+		Connection api.Connection `json:"connection"`
+		Ready      bool           `json:"ready"`
+	}{c.status.Connection, false}))
 }
 
 // Status returns a snapshot; metadata from disconnected sessions is not retained.
@@ -265,27 +299,61 @@ type reply struct {
 	Result    json.RawMessage `json:"result"`
 	ErrorCode *int            `json:"error_code"`
 	Event     string          `json:"event"`
+	Data      json.RawMessage `json:"data"`
 }
 
 type session struct {
-	conn    *websocket.Conn
-	done    chan struct{}
-	mu      sync.Mutex
-	pending map[string]chan reply
+	conn       *websocket.Conn
+	done       chan struct{}
+	mu         sync.Mutex
+	pending    map[string]chan reply
+	snapshotID string
 }
 
-func (s *session) read(ctx context.Context) {
+func (s *session) read(ctx, syncCtx context.Context, c *Client, syncSpan trace.Span) string {
+	synchronized := false
+	buffered := []reply{}
+	bufferBytes := 0
 	for {
 		var response reply
-		if err := wsjson.Read(ctx, s.conn, &response); err != nil {
-			return
+		readCtx := ctx
+		if !synchronized {
+			readCtx = syncCtx
+		}
+		if err := wsjson.Read(readCtx, s.conn, &response); err != nil {
+			if !synchronized && errors.Is(syncCtx.Err(), context.DeadlineExceeded) {
+				return "inventory synchronization timed out"
+			}
+			return "connection closed"
 		}
 		if response.Event == "server_shutdown" {
-			return
+			return "server shutting down"
+		}
+		if response.MessageID == s.snapshotID {
+			if synchronized {
+				continue
+			}
+			if response.ErrorCode != nil || c.applySnapshot(s, response.Result, buffered) != nil {
+				syncSpan.SetStatus(codes.Error, "inventory synchronization failed")
+				return "inventory synchronization failed"
+			}
+			syncSpan.End()
+			synchronized, buffered = true, nil
+			continue
 		}
 		if response.MessageID == "" {
-			// Device events are handled separately from RPC replies. Inventory
-			// and event subscriptions will be added in the next milestone.
+			if response.Event == "" {
+				continue
+			}
+			if !synchronized {
+				bufferBytes += len(response.Data)
+				if len(buffered) >= 128 || bufferBytes > 8<<20 {
+					return "inventory synchronization overflow"
+				}
+				buffered = append(buffered, response)
+			} else if err := c.applyEvent(s, response); err != nil {
+				return "invalid inventory update"
+			}
 			continue
 		}
 		s.mu.Lock()

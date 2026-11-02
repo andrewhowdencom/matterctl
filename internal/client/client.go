@@ -21,10 +21,11 @@ import (
 )
 
 type Client struct {
-	baseURL *url.URL
-	http    *http.Client
-	tracer  trace.Tracer
-	timeout time.Duration
+	baseURL           *url.URL
+	http              *http.Client
+	tracer            trace.Tracer
+	timeout           time.Duration
+	streamIdleTimeout time.Duration
 }
 
 type Option func(*Client)
@@ -43,10 +44,11 @@ func New(address string, options ...Option) (*Client, error) {
 		return nil, errors.New("invalid server.url: require an absolute http:// or https:// URL without user information, query, or fragment")
 	}
 	c := &Client{
-		baseURL: u,
-		http:    &http.Client{},
-		timeout: 5 * time.Second,
-		tracer:  otel.Tracer("github.com/andrewhowdencom/matterctl/internal/client"),
+		baseURL:           u,
+		http:              &http.Client{},
+		timeout:           5 * time.Second,
+		streamIdleTimeout: 45 * time.Second,
+		tracer:            otel.Tracer("github.com/andrewhowdencom/matterctl/internal/client"),
 	}
 	for _, option := range options {
 		option(c)
@@ -58,10 +60,18 @@ func New(address string, options ...Option) (*Client, error) {
 }
 
 func (c *Client) ServerInfo(ctx context.Context) (status api.ServerStatus, err error) {
+	err = c.getJSON(ctx, "server-info", api.ServerInfoPath, nil, &status)
+	if err == nil && (status.Connection.State != "connected" || status.Server == nil) {
+		err = errors.New("invalid matterctl response: missing connected server information")
+	}
+	return status, err
+}
+
+func (c *Client) getJSON(ctx context.Context, operation, path string, query url.Values, result any) (err error) {
 	ctx, cancel := context.WithTimeout(ctx, c.timeout)
 	defer cancel()
-	ctx, span := c.tracer.Start(ctx, "server-info", trace.WithSpanKind(trace.SpanKindClient), trace.WithAttributes(
-		attribute.String("http.request.method", http.MethodGet), attribute.String("http.path", api.ServerInfoPath),
+	ctx, span := c.tracer.Start(ctx, operation, trace.WithSpanKind(trace.SpanKindClient), trace.WithAttributes(
+		attribute.String("http.request.method", http.MethodGet), attribute.String("http.path", path),
 	))
 	defer func() {
 		if err != nil {
@@ -70,31 +80,45 @@ func (c *Client) ServerInfo(ctx context.Context) (status api.ServerStatus, err e
 		}
 		span.End()
 	}()
-	address := c.baseURL.JoinPath(api.ServerInfoPath)
+	address := c.baseURL.JoinPath(path)
+	address.RawQuery = query.Encode()
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, address.String(), nil)
 	if err != nil {
-		return status, errors.New("create server information request")
+		return errors.New("create service request")
 	}
 	request.Header.Set("Accept", "application/json")
 	propagation.TraceContext{}.Inject(ctx, propagation.HeaderCarrier(request.Header))
 	response, err := c.http.Do(request)
 	if err != nil {
 		if ctx.Err() != nil {
-			return status, ctx.Err()
+			return ctx.Err()
 		}
-		return status, errors.New("cannot reach matterctl service; check that serve is running and server.url is correct")
+		return errors.New("cannot reach matterctl service; check that serve is running and server.url is correct")
 	}
 	defer func() { _ = response.Body.Close() }()
 	span.SetAttributes(attribute.Int("http.response.status_code", response.StatusCode))
-	decoder := json.NewDecoder(io.LimitReader(response.Body, 64<<10))
-	if err := decoder.Decode(&status); err != nil {
-		return status, fmt.Errorf("invalid matterctl response (HTTP %d)", response.StatusCode)
+	limit := int64(16 << 20)
+	if path == api.ServerInfoPath {
+		limit = 64 << 10
+	}
+	err = decodeResponse(response, result, limit)
+	if err != nil && ctx.Err() != nil {
+		return ctx.Err()
+	}
+	return err
+}
+
+func decodeResponse(response *http.Response, result any, limit int64) error {
+	body, err := io.ReadAll(io.LimitReader(response.Body, limit+1))
+	if err != nil || int64(len(body)) > limit || json.Unmarshal(body, result) != nil {
+		return fmt.Errorf("invalid matterctl response (HTTP %d)", response.StatusCode)
 	}
 	if response.StatusCode != http.StatusOK {
-		return status, fmt.Errorf("matterctl server information request failed (HTTP %d)", response.StatusCode)
+		var failure api.ErrorResponse
+		if json.Unmarshal(body, &failure) == nil && failure.Error != "" {
+			return fmt.Errorf("matterctl request failed (HTTP %d): %s", response.StatusCode, failure.Error)
+		}
+		return fmt.Errorf("matterctl request failed (HTTP %d)", response.StatusCode)
 	}
-	if status.Connection.State != "connected" || status.Server == nil {
-		return status, errors.New("invalid matterctl response: missing connected server information")
-	}
-	return status, nil
+	return nil
 }
