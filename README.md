@@ -2,8 +2,9 @@
 
 A Go CLI and browser interface for local automation through OHF Matter Server.
 `serve` connects to Matter Server and exposes an HTTP API. The CLI can inspect
-the connection, list and inspect devices, and watch live events. The browser
-page displays **unimplemented**. Commissioning and control are next.
+the connection, discover and commission shared devices, inspect their capabilities,
+and watch live events. The browser page displays **unimplemented**. Friendly-name
+aliases and power control follow next.
 
 See the [implementation plan](PLAN.md) for the agreed direction, proposed
 commands, and milestones toward controlling the first light.
@@ -37,6 +38,8 @@ from the LAN. Port 8080 is already used by another service on the target host.
 ./bin/matterctl server info
 ./bin/matterctl server info --output json
 ./bin/matterctl device list
+./bin/matterctl device discover
+./bin/matterctl device commission --code-stdin --network-only
 ./bin/matterctl device inspect "Couch lamp"
 ./bin/matterctl event watch --output json
 ```
@@ -69,11 +72,17 @@ output: text
 | Log level | `--log-level` | `MATTERCTL_LOG_LEVEL` | `info` |
 | Upstream URL (`serve`) | `--matter.url` | `MATTERCTL_MATTER_URL` | `ws://127.0.0.1:5580/ws` |
 | Service URL (CLI) | `--server.url` | `MATTERCTL_SERVER_URL` | `http://127.0.0.1:8081` |
-| CLI deadline | `--request.timeout` | `MATTERCTL_REQUEST_TIMEOUT` | `5s` |
+| Ordinary CLI request deadline | `--request.timeout` | `MATTERCTL_REQUEST_TIMEOUT` | `5s` |
 | CLI output | `--output` | `MATTERCTL_OUTPUT` | `text` |
 
 For example, `matterctl serve --http.address 127.0.0.1:8081` restricts the
 development server to localhost. Logs go to stderr using `log/slog`.
+
+Discovery waits up to 30 seconds. Commissioning has its own `--timeout` (default
+5 minutes, maximum 10 minutes). Pairing codes use `--code-stdin` or `--code`;
+they are never loaded from Viper configuration or environment variables.
+See [share an existing Matter light](docs/how-to/commission-device.md) for the
+Google Home workflow and hidden terminal input.
 
 ## Install on the host
 

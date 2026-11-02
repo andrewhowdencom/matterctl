@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/coder/websocket"
@@ -30,18 +31,19 @@ const (
 )
 
 type Client struct {
-	url         string
-	logger      *slog.Logger
-	tracer      trace.Tracer
-	mu          sync.Mutex
-	current     *session
-	status      api.ServerStatus
-	serial      uint64
-	nodes       map[api.NodeID]node
-	ready       bool
-	observedAt  time.Time
-	watchers    map[uint64]watcher
-	watchSerial uint64
+	url           string
+	logger        *slog.Logger
+	tracer        trace.Tracer
+	mu            sync.Mutex
+	current       *session
+	status        api.ServerStatus
+	serial        uint64
+	nodes         map[api.NodeID]node
+	ready         bool
+	observedAt    time.Time
+	watchers      map[uint64]watcher
+	watchSerial   uint64
+	commissioning atomic.Bool
 
 	connectTimeout time.Duration
 	syncTimeout    time.Duration
@@ -231,7 +233,11 @@ func (c *Client) ServerInfo(ctx context.Context) (api.ServerStatus, error) {
 }
 
 func (c *Client) call(ctx context.Context, command string, args any, result any) (err error) {
-	ctx, cancel := context.WithTimeout(ctx, c.requestTimeout)
+	return c.callWithTimeout(ctx, command, args, result, c.requestTimeout)
+}
+
+func (c *Client) callWithTimeout(ctx context.Context, command string, args any, result any, timeout time.Duration) (err error) {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	ctx, span := c.tracer.Start(ctx, "matter."+command, trace.WithSpanKind(trace.SpanKindClient))
 	defer func() {
@@ -285,7 +291,7 @@ func (c *Client) call(ctx context.Context, command string, args any, result any)
 	case response := <-response:
 		if response.ErrorCode != nil {
 			// Upstream messages/details can contain arbitrary request data.
-			return fmt.Errorf("upstream Matter Server returned error code %d", *response.ErrorCode)
+			return remoteError{code: *response.ErrorCode, reason: safeReason(response.Reason)}
 		}
 		if err := json.Unmarshal(response.Result, result); err != nil {
 			return errors.New("invalid Matter Server response")
@@ -298,6 +304,7 @@ type reply struct {
 	MessageID string          `json:"message_id"`
 	Result    json.RawMessage `json:"result"`
 	ErrorCode *int            `json:"error_code"`
+	Reason    string          `json:"reason"`
 	Event     string          `json:"event"`
 	Data      json.RawMessage `json:"data"`
 }

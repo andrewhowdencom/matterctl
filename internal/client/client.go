@@ -2,6 +2,7 @@
 package client
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -45,7 +46,7 @@ func New(address string, options ...Option) (*Client, error) {
 	}
 	c := &Client{
 		baseURL:           u,
-		http:              &http.Client{},
+		http:              &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }},
 		timeout:           5 * time.Second,
 		streamIdleTimeout: 45 * time.Second,
 		tracer:            otel.Tracer("github.com/andrewhowdencom/matterctl/internal/client"),
@@ -68,10 +69,14 @@ func (c *Client) ServerInfo(ctx context.Context) (status api.ServerStatus, err e
 }
 
 func (c *Client) getJSON(ctx context.Context, operation, path string, query url.Values, result any) (err error) {
-	ctx, cancel := context.WithTimeout(ctx, c.timeout)
+	return c.requestJSON(ctx, operation, http.MethodGet, path, query, nil, result, c.timeout)
+}
+
+func (c *Client) requestJSON(ctx context.Context, operation, method, path string, query url.Values, input, result any, timeout time.Duration) (err error) {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	ctx, span := c.tracer.Start(ctx, operation, trace.WithSpanKind(trace.SpanKindClient), trace.WithAttributes(
-		attribute.String("http.request.method", http.MethodGet), attribute.String("http.path", path),
+		attribute.String("http.request.method", method), attribute.String("http.path", path),
 	))
 	defer func() {
 		if err != nil {
@@ -82,11 +87,22 @@ func (c *Client) getJSON(ctx context.Context, operation, path string, query url.
 	}()
 	address := c.baseURL.JoinPath(path)
 	address.RawQuery = query.Encode()
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, address.String(), nil)
+	var body io.Reader
+	if input != nil {
+		encoded, err := json.Marshal(input)
+		if err != nil {
+			return errors.New("encode service request")
+		}
+		body = bytes.NewReader(encoded)
+	}
+	request, err := http.NewRequestWithContext(ctx, method, address.String(), body)
 	if err != nil {
 		return errors.New("create service request")
 	}
 	request.Header.Set("Accept", "application/json")
+	if input != nil {
+		request.Header.Set("Content-Type", "application/json")
+	}
 	propagation.TraceContext{}.Inject(ctx, propagation.HeaderCarrier(request.Header))
 	response, err := c.http.Do(request)
 	if err != nil {
@@ -108,6 +124,15 @@ func (c *Client) getJSON(ctx context.Context, operation, path string, query url.
 	return err
 }
 
+type responseError struct {
+	code    int
+	message string
+}
+
+func (e responseError) Error() string {
+	return fmt.Sprintf("matterctl request failed (HTTP %d): %s", e.code, e.message)
+}
+
 func decodeResponse(response *http.Response, result any, limit int64) error {
 	body, err := io.ReadAll(io.LimitReader(response.Body, limit+1))
 	if err != nil || int64(len(body)) > limit || json.Unmarshal(body, result) != nil {
@@ -116,7 +141,7 @@ func decodeResponse(response *http.Response, result any, limit int64) error {
 	if response.StatusCode != http.StatusOK {
 		var failure api.ErrorResponse
 		if json.Unmarshal(body, &failure) == nil && failure.Error != "" {
-			return fmt.Errorf("matterctl request failed (HTTP %d): %s", response.StatusCode, failure.Error)
+			return responseError{code: response.StatusCode, message: failure.Error}
 		}
 		return fmt.Errorf("matterctl request failed (HTTP %d)", response.StatusCode)
 	}
