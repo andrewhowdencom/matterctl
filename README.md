@@ -2,8 +2,8 @@
 
 A Go CLI and browser interface for local automation through OHF Matter Server.
 `serve` connects to Matter Server and exposes an HTTP API. The CLI can inspect
-that connection with `server info`; the browser page displays **unimplemented**.
-Device commissioning and control are the next milestones.
+the connection, list and inspect devices, and watch live events. The browser
+page displays **unimplemented**. Commissioning and control are next.
 
 See the [implementation plan](PLAN.md) for the agreed direction, proposed
 commands, and milestones toward controlling the first light.
@@ -36,6 +36,9 @@ from the LAN. Port 8080 is already used by another service on the target host.
 ./bin/matterctl version
 ./bin/matterctl server info
 ./bin/matterctl server info --output json
+./bin/matterctl device list
+./bin/matterctl device inspect "Couch lamp"
+./bin/matterctl event watch --output json
 ```
 
 ## Configuration
@@ -89,8 +92,9 @@ The image runs the binary as UID/GID `65532:65532`, with a read-only filesystem
 and no Linux capabilities. It uses host networking to reach
 Matter Server's loopback-only API at `ws://127.0.0.1:5580/ws`. The installed
 service listens on port 8081. The browser placeholder and `/healthz` remain
-available when Matter Server is down; `server info` reports the upstream
-failure and exits nonzero. The local API has no authentication.
+available when Matter Server is down; `server info` and `device list` report
+upstream failures and exit nonzero. Event streams report connection changes and
+receive a replacement inventory after reconnect. The local API has no authentication.
 
 ```sh
 sudo systemctl status matterctl.service

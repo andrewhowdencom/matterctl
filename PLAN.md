@@ -1,7 +1,7 @@
 # matterctl implementation plan
 
 Status: agreed, 2026-11-02. The build and deployment bootstrap is complete.
-Phase 1 is implemented and validated. The remaining phases are planned.
+Phases 1 and 2 are implemented and validated. The remaining phases are planned.
 
 ## First milestone
 
@@ -156,13 +156,22 @@ IPv4 loopback. Failure and recovery cases were exercised with controlled peers.
 
 ### 2. Inspect inventory and observe changes
 
-- [ ] Load the initial snapshot with `start_listening` and process updates.
-- [ ] Model nodes, endpoint hierarchy, device types, cluster roles, and supported
+- [x] Load the initial snapshot with `start_listening` and process updates.
+- [x] Model nodes, endpoint hierarchy, device types, cluster roles, and supported
   operations without requiring a physical device type for every operation.
-- [ ] Implement `device list`, `device inspect`, and `event watch`.
-- [ ] Test empty inventory, multiple endpoints, a bridge, an event-only switch,
+- [x] Implement `device list`, `device inspect`, and `event watch`.
+- [x] Test empty inventory, multiple endpoints, a bridge, an event-only switch,
   unsupported commands, unavailable devices, and resynchronization.
-- [ ] Confirm that client event streams are canceled and released cleanly.
+- [x] Confirm that client event streams are canceled and released cleanly.
+
+Phase 2 passed `task validate` and a live read-only subscription check on
+2026-11-02. Matter Server's inventory was synchronized and empty. The CLI
+reported a missing target correctly, streamed its initial inventory, and exited
+cleanly on Ctrl-C. Controlled peers covered populated devices, bridges, switch
+events, reconnect replacement, and slow-subscriber cleanup. Labels can already
+select a node for inspection; persistent aliases remain phase 4.
+`task install` deployed the container; the same checks passed through localhost,
+the LAN address, and the container CLI. Matter Server remained loopback-only.
 
 ### 3. Commission the first existing light
 
