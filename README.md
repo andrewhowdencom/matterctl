@@ -1,12 +1,19 @@
 # matterctl
 
 A Go CLI and browser interface for local automation through OHF Matter Server.
-The initial `serve` command displays **unimplemented**. Matter connectivity is
-not implemented yet.
+`serve` connects to Matter Server and exposes an HTTP API. The CLI can inspect
+that connection with `server info`; the browser page displays **unimplemented**.
+Device commissioning and control are the next milestones.
+
+See the [implementation plan](PLAN.md) for the agreed direction, proposed
+commands, and milestones toward controlling the first light.
+See [user documentation](docs/index.md) for connection checks and the API
+reference, and [architecture](ARCHITECTURE.md) for application boundaries.
 
 ## Development
 
-Prerequisites: Go 1.26.2 or newer, [Task](https://taskfile.dev/), and
+Prerequisites: Go 1.26.2 or newer, a C compiler for race tests,
+[Task](https://taskfile.dev/), and
 [golangci-lint v2](https://golangci-lint.run/docs/welcome/install/) with support
 for the installed Go version. Deployment also requires Podman with Quadlet,
 systemd, and sudo access.
@@ -27,6 +34,8 @@ from the LAN. Port 8080 is already used by another service on the target host.
 ./bin/matterctl --help
 ./bin/matterctl serve --help
 ./bin/matterctl version
+./bin/matterctl server info
+./bin/matterctl server info --output json
 ```
 
 ## Configuration
@@ -42,12 +51,23 @@ http:
   address: ":8081"
 log:
   level: info
+matter:
+  url: "ws://127.0.0.1:5580/ws"
+server:
+  url: "http://127.0.0.1:8081"
+request:
+  timeout: 5s
+output: text
 ```
 
 | Setting | Flag | Environment variable | Default |
 | --- | --- | --- | --- |
 | HTTP address | `--http.address` | `MATTERCTL_HTTP_ADDRESS` | `:8081` |
 | Log level | `--log-level` | `MATTERCTL_LOG_LEVEL` | `info` |
+| Upstream URL (`serve`) | `--matter.url` | `MATTERCTL_MATTER_URL` | `ws://127.0.0.1:5580/ws` |
+| Service URL (CLI) | `--server.url` | `MATTERCTL_SERVER_URL` | `http://127.0.0.1:8081` |
+| CLI deadline | `--request.timeout` | `MATTERCTL_REQUEST_TIMEOUT` | `5s` |
+| CLI output | `--output` | `MATTERCTL_OUTPUT` | `text` |
 
 For example, `matterctl serve --http.address 127.0.0.1:8081` restricts the
 development server to localhost. Logs go to stderr using `log/slog`.
@@ -66,15 +86,17 @@ The Quadlet's `[Install]` section activates the service at boot; do not run
 `systemctl enable` on the generated unit.
 
 The image runs the binary as UID/GID `65532:65532`, with a read-only filesystem
-and no Linux capabilities. It uses host networking so it can later reach
+and no Linux capabilities. It uses host networking to reach
 Matter Server's loopback-only API at `ws://127.0.0.1:5580/ws`. The installed
-service listens on port 8081 and does not require Matter Server to be running
-for this placeholder page.
+service listens on port 8081. The browser placeholder and `/healthz` remain
+available when Matter Server is down; `server info` reports the upstream
+failure and exits nonzero. The local API has no authentication.
 
 ```sh
 sudo systemctl status matterctl.service
 sudo journalctl -u matterctl.service -f
 curl http://127.0.0.1:8081/
+./bin/matterctl server info
 sudo systemctl stop matterctl.service
 ```
 
