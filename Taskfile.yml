@@ -1,0 +1,64 @@
+version: '3'
+
+tasks:
+  default:
+    cmds:
+      - task --list
+
+  setup:
+    desc: Download Go dependencies
+    cmds:
+      - go mod download
+
+  generate:
+    desc: Run Go code generation
+    cmds:
+      - go generate ./...
+
+  build:
+    desc: Build bin/matterctl
+    cmds:
+      - mkdir -p bin
+      - go build -trimpath -o bin/matterctl ./cmd/matterctl
+
+  test:
+    desc: Run tests with the race detector
+    cmds:
+      - go test -race ./...
+
+  lint:
+    desc: Check Go formatting and run golangci-lint
+    preconditions:
+      - sh: command -v golangci-lint
+        msg: Install golangci-lint v2 (https://golangci-lint.run/docs/welcome/install/)
+      - sh: test -z "$(gofmt -l cmd internal)"
+        msg: Run gofmt on cmd/ and internal/ before validating
+    cmds:
+      - golangci-lint run
+
+  validate:
+    desc: Run formatting, lint, race tests, and the build
+    cmds:
+      - task: lint
+      - task: test
+      - task: build
+
+  run:
+    desc: Start the browser interface locally
+    cmds:
+      - go run ./cmd/matterctl serve {{.CLI_ARGS}}
+
+  container:build:
+    desc: Build the image in the rootful Podman store
+    cmds:
+      - sudo podman build --tag localhost/matterctl:latest --file Containerfile .
+
+  install:
+    desc: Validate, build, install the Quadlet, and start or restart matterctl
+    cmds:
+      - task: validate
+      - task: container:build
+      - sudo install -D -m 0644 deploy/matterctl.container /etc/containers/systemd/matterctl.container
+      - sudo systemctl daemon-reload
+      - sudo systemctl restart matterctl.service
+      - sudo systemctl is-active --quiet matterctl.service
