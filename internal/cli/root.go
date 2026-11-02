@@ -7,12 +7,13 @@ import (
 	"path/filepath"
 	"runtime/debug"
 	"strings"
+	"time"
 
 	"github.com/adrg/xdg"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/andrewhowdencom/matterctl/internal/server"
+	"github.com/andrewhowdencom/matterctl/internal/app"
 )
 
 // NewCommand constructs an independent command tree and configuration instance.
@@ -44,23 +45,36 @@ func NewCommand() (*cobra.Command, error) {
 	}
 	root.PersistentFlags().StringVar(&configFile, "config", "", "Configuration file (default: $XDG_CONFIG_HOME/matterctl/config.yaml)")
 	root.PersistentFlags().String("log-level", "info", "Log level: debug, info, warn, or error")
+	root.PersistentFlags().String("server.url", "http://127.0.0.1:8081", "matterctl service URL (MATTERCTL_SERVER_URL)")
+	root.PersistentFlags().Duration("request.timeout", 5*time.Second, "CLI request deadline (MATTERCTL_REQUEST_TIMEOUT)")
+	root.PersistentFlags().String("output", "text", "Output format: text or json (MATTERCTL_OUTPUT)")
 	if err := config.BindPFlag("log.level", root.PersistentFlags().Lookup("log-level")); err != nil {
 		return nil, fmt.Errorf("bind log level: %w", err)
+	}
+	for _, name := range []string{"server.url", "request.timeout", "output"} {
+		if err := config.BindPFlag(name, root.PersistentFlags().Lookup(name)); err != nil {
+			return nil, fmt.Errorf("bind %s: %w", name, err)
+		}
 	}
 
 	serve := &cobra.Command{
 		Use:     "serve",
-		Short:   "Serve the matterctl browser interface",
+		Short:   "Serve the matterctl API and browser interface",
 		Example: "  matterctl serve\n  matterctl serve --http.address 127.0.0.1:8081",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return server.Run(cmd.Context(), config.GetString("http.address"), logger)
+			return app.Serve(cmd.Context(), config.GetString("http.address"), config.GetString("matter.url"), logger)
 		},
 	}
 	serve.Flags().String("http.address", ":8081", "HTTP listen address (MATTERCTL_HTTP_ADDRESS)")
+	serve.Flags().String("matter.url", "ws://127.0.0.1:5580/ws", "Upstream Matter Server URL (MATTERCTL_MATTER_URL)")
 	if err := config.BindPFlag("http.address", serve.Flags().Lookup("http.address")); err != nil {
 		return nil, fmt.Errorf("bind HTTP address: %w", err)
 	}
+	if err := config.BindPFlag("matter.url", serve.Flags().Lookup("matter.url")); err != nil {
+		return nil, fmt.Errorf("bind Matter Server URL: %w", err)
+	}
+	root.AddCommand(serverCommand(config))
 	root.AddCommand(serve, &cobra.Command{
 		Use:   "version",
 		Short: "Print the build version",
