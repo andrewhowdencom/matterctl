@@ -25,7 +25,8 @@ func configuredClient(config *viper.Viper) (*client.Client, string, error) {
 }
 
 func deviceCommand(config *viper.Viper) *cobra.Command {
-	command := &cobra.Command{Use: "device", Short: "List and inspect commissioned Matter devices"}
+	command := &cobra.Command{Use: "device", Short: "Discover, commission, and inspect Matter devices"}
+	command.AddCommand(discoverCommand(config), commissionCommand(config))
 	command.AddCommand(&cobra.Command{
 		Use: "list", Short: "List devices and their endpoint capabilities", Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {

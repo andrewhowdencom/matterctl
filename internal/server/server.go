@@ -21,14 +21,19 @@ import (
 )
 
 type options struct {
-	matter    api.InfoSource
-	devices   api.DeviceSource
-	heartbeat time.Duration
-	tracer    trace.Tracer
+	matter        api.InfoSource
+	devices       api.DeviceSource
+	commissioning api.CommissioningSource
+	heartbeat     time.Duration
+	tracer        trace.Tracer
 }
 
 func WithDevices(source api.DeviceSource) Option {
 	return func(o *options) { o.devices = source }
+}
+
+func WithCommissioning(source api.CommissioningSource) Option {
+	return func(o *options) { o.commissioning = source }
 }
 
 type Option func(*options)
@@ -104,6 +109,7 @@ func handler(logger *slog.Logger, opts ...Option) http.Handler {
 		}
 	})
 	addDeviceRoutes(mux, options, logger)
+	addCommissioningRoutes(mux, options, logger)
 	return mux
 }
 

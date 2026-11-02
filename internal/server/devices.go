@@ -33,6 +33,10 @@ func responseCode(err error) int {
 		return http.StatusNotFound
 	case errors.Is(err, api.ErrAmbiguous):
 		return http.StatusConflict
+	case errors.Is(err, api.ErrBusy):
+		return http.StatusConflict
+	case errors.Is(err, api.ErrInvalidRequest):
+		return http.StatusBadRequest
 	case errors.Is(err, context.DeadlineExceeded):
 		return http.StatusGatewayTimeout
 	default:

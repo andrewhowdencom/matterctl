@@ -20,9 +20,9 @@ flowchart LR
 | `cmd/matterctl` | Process exit and signal handling |
 | `internal/cli` | Cobra commands, Viper configuration, human/JSON output |
 | `internal/client` | Context-aware HTTP API client |
-| `internal/api` | Shared response types and the `InfoSource`/`DeviceSource` application interfaces |
+| `internal/api` | Shared types and `InfoSource`/`DeviceSource`/`CommissioningSource` interfaces |
 | `internal/server` | HTTP API and browser placeholder |
-| `internal/matter` | WebSocket session, synchronized inventory, capability projection, event subscribers |
+| `internal/matter` | WebSocket session, inventory, capability projection, subscriptions, and commissioning |
 | `internal/app` | Adapter construction and coordinated lifetimes |
 
 Cobra and Viper remain at the CLI boundary. The HTTP server depends on the
@@ -94,6 +94,28 @@ ten-second deadlines, cleared during idle periods. CLI establishment uses
 Ctrl-C, or service shutdown releases the subscription. Existing streams survive
 upstream reconnects and receive a replacement inventory. A node filter is
 resolved once and never retargeted to another node because a label changed.
+
+## Discovery and commissioning
+
+The commissioning interface remains separate from inventory and connection
+queries. The adapter requires synchronized inventory, uses a bounded 30-second
+discovery RPC, and gives commissioning a separate overall wait (default five
+minutes, at most ten). These operations extend the ordinary HTTP write deadline.
+At most one commissioning caller waits at a time; the shared reader continues
+applying inventory events throughout the operation.
+
+Commission replies are projected into the existing safe device DTO. They do not
+overwrite the subscription's inventory cache, because a reply can arrive after a
+newer attribute report. The subscription remains authoritative. Losing a reply
+or canceling the wait does not cancel the remote operation or establish failure;
+the caller is told to check inventory before retrying. There is no automatic
+replay or persistent job queue.
+
+Pairing codes are bounded, validated, and passed only to `commission_with_code`.
+They bypass configuration and never enter logs, trace attributes, or events.
+Upstream errors retain numeric codes and allowlisted reasons, with arbitrary
+details discarded. HTTP commission bodies require JSON and reject unknown fields.
+The HTTP client rejects redirects to avoid forwarding or replaying request bodies.
 
 ## Observability
 

@@ -24,5 +24,5 @@ func Serve(ctx context.Context, httpAddress, matterURL string, logger *slog.Logg
 		cancel()
 		<-done
 	}()
-	return server.Run(ctx, httpAddress, logger, server.WithMatter(upstream), server.WithDevices(upstream))
+	return server.Run(ctx, httpAddress, logger, server.WithMatter(upstream), server.WithDevices(upstream), server.WithCommissioning(upstream))
 }

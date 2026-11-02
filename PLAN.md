@@ -1,7 +1,8 @@
 # matterctl implementation plan
 
 Status: agreed, 2026-11-02. The build and deployment bootstrap is complete.
-Phases 1 and 2 are implemented and validated. The remaining phases are planned.
+Phases 1 and 2 are implemented and validated. Phase 3's commands are implemented;
+real-device commissioning awaits a fresh sharing code. The remaining phases are planned.
 
 ## First milestone
 
@@ -175,8 +176,8 @@ the LAN address, and the container CLI. Matter Server remained loopback-only.
 
 ### 3. Commission the first existing light
 
-- [ ] Implement discovery and network-only commissioning through Matter Server.
-- [ ] Surface commissioning progress, completion, and useful upstream errors.
+- [x] Implement discovery and network-only commissioning through Matter Server.
+- [x] Surface commissioning progress, completion, and useful upstream errors.
   Do not retain pairing codes in state or logs.
 - [ ] Use a fresh Google Home sharing code when performing the real test.
 - [ ] Inspect the returned light's actual endpoints and On/Off support.
@@ -186,6 +187,21 @@ The read-only inventory check on 2026-11-02 returned zero commissioned nodes.
 Real commissioning therefore precedes end-to-end light-control validation.
 The selected light must support Matter directly or through an appropriate
 Matter bridge; appearing in Google Home alone does not establish that.
+
+Phase 3 adds `device discover` and `device commission --code-stdin --network-only`,
+with safe error reasons, bounded waits, and no automatic retries. The CLI reports
+waiting and final completion; the installed API has no detailed commissioning
+stage events. Controlled peers cover capability projection, code privacy, late
+replies, cancellation, and continuing inventory updates. HTTP tests cover long
+operation deadlines, rejected bodies, redirects, and cancellation. The physical
+sharing/inspection/Google Home checks above remain pending until a fresh sharing
+window is opened. See [the sharing how-to](docs/how-to/commission-device.md).
+
+On 2026-11-02, `task validate` passed lint, race tests, and the build, and
+`task install` deployed the commands. Live discovery succeeded through localhost,
+the LAN address, and the container CLI, with zero advertisements found. Inventory
+was synchronized and empty; event streaming and Ctrl-C cleanup still passed.
+Matter Server remained bound to `127.0.0.1:5580`.
 
 ### 4. Resolve friendly names and persist aliases
 
