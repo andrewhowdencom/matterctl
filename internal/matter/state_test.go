@@ -49,6 +49,15 @@ func TestStateDecodersNormalizeOnlyKnownValues(t *testing.T) {
 	}
 }
 
+func TestAttributeNamesAreScopedByCluster(t *testing.T) {
+	if got := attributeName(clusterSwitch, attributeSwitchCurrentPosition); got != "Switch.CurrentPosition" {
+		t.Fatalf("Switch attribute name = %q", got)
+	}
+	if got := attributeName(clusterBasicInformation, attributeSwitchCurrentPosition); got != "" {
+		t.Fatalf("invented name for unrelated cluster: %q", got)
+	}
+}
+
 func TestSensorStateProjectsAndStreamsWithoutRawAttributes(t *testing.T) {
 	n := fixtureNode(t, "1", "Bridge")
 	n.EndpointParents[4] = 0
@@ -87,10 +96,11 @@ func TestSensorStateProjectsAndStreamsWithoutRawAttributes(t *testing.T) {
 	}
 	event := <-events
 	var update struct {
-		Path  string     `json:"path"`
-		State *api.State `json:"state"`
+		Path          string     `json:"path"`
+		AttributeName string     `json:"attribute_name"`
+		State         *api.State `json:"state"`
 	}
-	if json.Unmarshal(event.Data, &update) != nil || update.Path != "4/1030/0" || update.State == nil || update.State.Text != "occupied" || string(update.State.Value) != "true" || strings.Contains(string(event.Data), "must-not-leak") {
+	if json.Unmarshal(event.Data, &update) != nil || update.Path != "4/1030/0" || update.AttributeName != "OccupancySensing.Occupancy" || update.State == nil || update.State.Text != "occupied" || string(update.State.Value) != "true" || strings.Contains(string(event.Data), "must-not-leak") {
 		t.Fatalf("incorrect occupancy event: %s", event.Data)
 	}
 	if err := c.applyEvent(c.current, reply{Event: "attribute_updated", Data: json.RawMessage(`[1,"5/1026/9",{"private_key":"must-not-leak"}]`)}); err != nil {

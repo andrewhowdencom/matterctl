@@ -52,17 +52,18 @@ per line, suitable for scripts. Text mode writes compact lines, for example:
 
 ```text
 2026-11-03T12:30:00Z inventory node=12 connection=connected ready=true devices=1 available=true endpoints=1 label="Couch lamp" types="Extended Color Light" states="power=off"
-2026-11-03T12:30:04Z attribute_updated node=12 device="Couch lamp" attribute=1/6/0 endpoint=1 label="Light" type="Extended Color Light" power=on
-2026-11-03T12:31:02Z attribute_updated node=15 attribute=1/1030/0 endpoint=1 type="Occupancy Sensor" occupancy=occupied
-2026-11-03T12:31:05Z attribute_updated node=16 attribute=1/1026/0 endpoint=1 type="Temperature Sensor" temperature=21.50°C
+2026-11-03T12:30:04Z attribute_updated node=12 device="Couch lamp" attribute=OnOff.OnOff path=1/6/0 endpoint=1 label="Light" type="Extended Color Light" power=on
+2026-11-03T12:31:02Z attribute_updated node=15 attribute=OccupancySensing.Occupancy path=1/1030/0 endpoint=1 type="Occupancy Sensor" occupancy=occupied
+2026-11-03T12:31:05Z attribute_updated node=16 attribute=TemperatureMeasurement.MeasuredValue path=1/1026/0 endpoint=1 type="Temperature Sensor" temperature=21.50°C
 2026-11-03T12:31:09Z node_event node=2 device="BILRESA scroll wheel" endpoint=2 cluster=59 event=1 name=initial_press type="Generic Switch" number=42 new_position=1
 ```
 
 Text mode shows the advertised endpoint type and recognized power, level,
 switch-position, occupancy, and temperature values. Inventory and node updates
 include a compact summary of up to four distinct types and states, with counts
-for types repeated across endpoints. Other attribute
-updates show their numeric path without a full device snapshot; `--output json`
+for types repeated across endpoints. Recognized attribute updates show their
+standard Matter name and numeric path without a full device snapshot. Unknown
+attributes show only their numeric path; `--output json`
 contains the full projected event, but unrecognized raw values are deliberately
 omitted. Text mode suppresses heartbeat messages. Press Ctrl-C to stop normally.
 `node` is the commissioned Matter node ID. On device changes, `device` uses the

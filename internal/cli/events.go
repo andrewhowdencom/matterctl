@@ -91,15 +91,20 @@ func printEvent(output io.Writer, event api.Event) error {
 		// The node ID in the event envelope identifies the removed device.
 	case "attribute_updated":
 		var update struct {
-			Path   string     `json:"path"`
-			Device api.Device `json:"device"`
-			State  *api.State `json:"state"`
+			Path          string     `json:"path"`
+			AttributeName string     `json:"attribute_name"`
+			Device        api.Device `json:"device"`
+			State         *api.State `json:"state"`
 		}
 		if err := decode(&update); err != nil {
 			return err
 		}
 		line += deviceIdentity(update.Device.Label, update.Device.Product)
-		line += fmt.Sprintf(" attribute=%s", update.Path)
+		if update.AttributeName != "" {
+			line += fmt.Sprintf(" attribute=%s path=%s", update.AttributeName, update.Path)
+		} else {
+			line += fmt.Sprintf(" attribute=%s", update.Path)
+		}
 		parts := strings.Split(update.Path, "/")
 		if len(parts) == 3 {
 			endpointID, err := strconv.ParseUint(parts[0], 10, 16)

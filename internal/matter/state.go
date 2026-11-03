@@ -11,6 +11,7 @@ import (
 type stateDecoder struct {
 	clusterID   uint32
 	attributeID uint32
+	matterName  string
 	name        string
 	unit        string
 	decode      func(json.RawMessage) (any, string, bool)
@@ -20,12 +21,21 @@ type stateDecoder struct {
 // Only decoded scalar values cross the application API boundary.
 func builtInStateDecoders() []stateDecoder {
 	return []stateDecoder{
-		{clusterOnOff, attributeOnOff, "power", "", decodePower},
-		{clusterLevelControl, attributeCurrentLevel, "level", "", decodeByte},
-		{clusterSwitch, attributeSwitchCurrentPosition, "switch_position", "", decodeByte},
-		{clusterTemperatureMeasurement, attributeMeasuredTemperature, "temperature", "°C", decodeTemperature},
-		{clusterOccupancySensing, attributeOccupancy, "occupancy", "", decodeOccupancy},
+		{clusterOnOff, attributeOnOff, "OnOff.OnOff", "power", "", decodePower},
+		{clusterLevelControl, attributeCurrentLevel, "LevelControl.CurrentLevel", "level", "", decodeByte},
+		{clusterSwitch, attributeSwitchCurrentPosition, "Switch.CurrentPosition", "switch_position", "", decodeByte},
+		{clusterTemperatureMeasurement, attributeMeasuredTemperature, "TemperatureMeasurement.MeasuredValue", "temperature", "°C", decodeTemperature},
+		{clusterOccupancySensing, attributeOccupancy, "OccupancySensing.Occupancy", "occupancy", "", decodeOccupancy},
 	}
+}
+
+func attributeName(clusterID, attributeID uint32) string {
+	for _, decoder := range builtInStateDecoders() {
+		if decoder.clusterID == clusterID && decoder.attributeID == attributeID {
+			return decoder.matterName
+		}
+	}
+	return ""
 }
 
 func decodeState(clusterID, attributeID uint32, raw json.RawMessage) (api.State, bool) {
