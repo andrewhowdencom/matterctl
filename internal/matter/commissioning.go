@@ -10,14 +10,22 @@ import (
 )
 
 type remoteError struct {
-	code   int
-	reason string
+	code          int
+	reason        string
+	status        *uint32
+	clusterStatus *uint32
 }
 
 func (e remoteError) Error() string {
 	message := fmt.Sprintf("upstream Matter Server returned error code %d", e.code)
 	if e.reason != "" {
 		message += " (" + e.reason + ")"
+	}
+	if e.status != nil {
+		message += fmt.Sprintf("; device status %d", *e.status)
+		if e.clusterStatus != nil {
+			message += fmt.Sprintf("; cluster status %d", *e.clusterStatus)
+		}
 	}
 	return message
 }

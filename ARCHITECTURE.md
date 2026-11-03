@@ -20,7 +20,7 @@ flowchart LR
 | `cmd/matterctl` | Process exit and signal handling |
 | `internal/cli` | Cobra commands, Viper configuration, human/JSON output |
 | `internal/client` | Context-aware HTTP API client |
-| `internal/api` | Shared types and `InfoSource`/`DeviceSource`/`CommissioningSource` interfaces |
+| `internal/api` | Shared types and small source interfaces |
 | `internal/server` | HTTP API and browser placeholder |
 | `internal/matter` | WebSocket session, inventory, capability projection, subscriptions, and commissioning |
 | `internal/app` | Adapter construction and coordinated lifetimes |
@@ -28,6 +28,11 @@ flowchart LR
 Cobra and Viper remain at the CLI boundary. The HTTP server depends on the
 small application interface, allowing tests to exercise API behavior without
 a live Matter network. The WebSocket adapter implements that interface.
+
+The Matter adapter resolves exact node and bridged endpoint labels for
+inspection, event filtering, and control. It writes supported Matter NodeLabel
+attributes and confirms them with a fresh read. Numeric node and endpoint IDs
+remain available for disambiguation. Matter Server owns label persistence.
 
 ## Connection lifecycle
 

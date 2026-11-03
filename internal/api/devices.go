@@ -73,6 +73,7 @@ type Endpoint struct {
 
 type DeviceType struct {
 	ID       uint32 `json:"id"`
+	Name     string `json:"name,omitempty"`
 	Revision uint16 `json:"revision"`
 }
 

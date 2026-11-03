@@ -1,8 +1,8 @@
 # matterctl implementation plan
 
-Status: agreed, 2026-11-02. The build and deployment bootstrap is complete.
-Phases 1 and 2 are implemented and validated. Phase 3's commands are implemented;
-real-device commissioning awaits a fresh sharing code. The remaining phases are planned.
+Status: implemented and technically validated, 2026-11-02. Real-device
+commissioning, Matter label writing, and named on/off commands succeeded.
+Physical light response and continued Google Home operation await observation.
 
 ## First milestone
 
@@ -23,7 +23,7 @@ acknowledgement alone does not complete it.
 | Browser UI | Eventually uses the same application API as the CLI. Its current placeholder can remain during this milestone. |
 | Command structure | Categories followed by verbs, including `device power on` and `device power off`. |
 | Capabilities | Determine supported operations from endpoint capabilities, features, and accepted commands. Device types provide context and presentation. |
-| Friendly names | Use Matter labels first, with persistent aliases held centrally by the service where needed. |
+| Friendly names | Use writable Matter NodeLabel attributes; use node IDs when names are unavailable or ambiguous. |
 | Addressing | Friendly names are normal CLI targets. Node and endpoint IDs remain available for inspection and disambiguation. |
 | Completion | Wait for an observation of the requested power state, within a bounded timeout. |
 | Access | No authentication for the local service. Keep Matter Server's API restricted to loopback. |
@@ -41,12 +41,12 @@ Future browser UI -----+--> matterctl service --> OHF Matter Server --> devices
 
 Matter Server remains responsible for controller identity, commissioning,
 protocol interactions, and device subscriptions. matterctl owns its application
-API, target resolution, aliases, CLI output, and interpretation of control
+API, target resolution, CLI output, and interpretation of control
 results. Future automation rules will also belong to matterctl.
 
 Keep the CLI and HTTP handlers thin. Share application operations for inventory,
 target resolution, and power control. Put the upstream WebSocket protocol and
-alias persistence behind small interfaces that can be exercised with realistic
+label writes behind small interfaces that can be exercised with realistic
 fixtures. Introduce packages as these responsibilities appear; a public Go
 library or plugin framework is not a milestone requirement.
 
@@ -67,9 +67,7 @@ matterctl device inspect <target>
 matterctl device discover
 matterctl device commission --code '<sharing-code>' --network-only
 
-matterctl device alias list
-matterctl device alias set "Couch lamp" <node> --endpoint <endpoint>
-matterctl device alias remove "Couch lamp"
+matterctl device label set <node> "Couch lamp"
 
 matterctl device power on "Couch lamp"
 matterctl device power off "Couch lamp"
@@ -82,7 +80,7 @@ Numeric node targets and `--endpoint` remain supported. An endpoint is an
 independently addressable part of a node: for example, an outlet in a multi-outlet
 plug or a light exposed by a bridge. With one compatible endpoint, the service
 can resolve a node-level name automatically. With several possible endpoints,
-require an endpoint or an alias that selects one.
+require an endpoint ID.
 
 Provide human-readable output and a consistent `--output json` option for
 non-streaming commands. Use newline-delimited JSON for machine-readable event
@@ -91,26 +89,19 @@ default service URL is `http://127.0.0.1:8081` and can be overridden for LAN use
 
 ## Friendly-name resolution
 
-Read the node's Matter label and applicable bridged endpoint labels. Preserve
-their source and display the underlying node/endpoint identifiers in inventory
-and inspection output. Names are not guaranteed to match Google Home nicknames.
+Read the node's Matter label and applicable bridged endpoint labels. Display
+node and endpoint identifiers in inventory and inspection output. Names are not
+guaranteed to match Google Home nicknames.
 
-An explicit alias identifies a stable node/endpoint target. Store aliases once
-in the service's persistent state; every CLI and browser client uses that same
-mapping. Creating an alias does not rename the device or change another
-controller's labels.
+Write a node's Basic Information `NodeLabel`, or a bridged endpoint's own
+`NodeLabel` when that cluster is present. Confirm a successful write with a
+fresh read before reporting success. Matter Server and the device own label
+persistence; matterctl keeps no service-owned alias state.
 
-Resolve a name only when it identifies one valid target. Reject ambiguity,
-including an alias colliding with another target's label, and list the candidate
-identifiers. Do not silently choose the first device or retarget an alias when
-a device is removed or recommissioned. Allow aliases to be edited or removed
-even when their target is offline.
-
-The state directory must survive container replacement. Add a writable bind
-mount, owned by the container's application user, while retaining the read-only
-container filesystem. Keep this state separate from Matter Server's controller
-identity and pairing data. Choose the smallest storage implementation that
-supports atomic updates and restart persistence.
+Resolve a name only when it identifies one node. Reject ambiguity across nodes
+and keep numeric node and endpoint IDs available for disambiguation. A label on
+an ordinary light endpoint is unsupported because it has no bridged label
+attribute.
 
 ## Power-control contract
 
@@ -170,7 +161,7 @@ Phase 2 passed `task validate` and a live read-only subscription check on
 reported a missing target correctly, streamed its initial inventory, and exited
 cleanly on Ctrl-C. Controlled peers covered populated devices, bridges, switch
 events, reconnect replacement, and slow-subscriber cleanup. Labels can already
-select a node for inspection; persistent aliases remain phase 4.
+select a node for inspection; label writing is covered in phase 4.
 `task install` deployed the container; the same checks passed through localhost,
 the LAN address, and the container CLI. Matter Server remained loopback-only.
 
@@ -179,23 +170,23 @@ the LAN address, and the container CLI. Matter Server remained loopback-only.
 - [x] Implement discovery and network-only commissioning through Matter Server.
 - [x] Surface commissioning progress, completion, and useful upstream errors.
   Do not retain pairing codes in state or logs.
-- [ ] Use a fresh Google Home sharing code when performing the real test.
-- [ ] Inspect the returned light's actual endpoints and On/Off support.
+- [x] Use a fresh Google Home sharing code when performing the real test.
+- [x] Inspect the returned light's actual endpoints and On/Off support.
 - [ ] Verify the device remains usable through Google Home.
 
-The read-only inventory check on 2026-11-02 returned zero commissioned nodes.
-Real commissioning therefore precedes end-to-end light-control validation.
-The selected light must support Matter directly or through an appropriate
-Matter bridge; appearing in Google Home alone does not establish that.
+The first real commission on 2026-11-02 added a Govee H60A6 light (reported
+vendor Shenzhen Qianyan Technology) as node 1. Endpoint 1 advertises On/Off,
+LevelControl, and ColorControl. Google Home operation after sharing still needs
+manual confirmation.
 
 Phase 3 adds `device discover` and `device commission --code-stdin --network-only`,
 with safe error reasons, bounded waits, and no automatic retries. The CLI reports
 waiting and final completion; the installed API has no detailed commissioning
 stage events. Controlled peers cover capability projection, code privacy, late
 replies, cancellation, and continuing inventory updates. HTTP tests cover long
-operation deadlines, rejected bodies, redirects, and cancellation. The physical
-sharing/inspection/Google Home checks above remain pending until a fresh sharing
-window is opened. See [the sharing how-to](docs/how-to/commission-device.md).
+operation deadlines, rejected bodies, redirects, and cancellation. Physical
+sharing and inspection succeeded; Google Home verification remains pending.
+See [the sharing how-to](docs/how-to/commission-device.md).
 
 On 2026-11-02, `task validate` passed lint, race tests, and the build, and
 `task install` deployed the commands. Live discovery succeeded through localhost,
@@ -203,32 +194,60 @@ the LAN address, and the container CLI, with zero advertisements found. Inventor
 was synchronized and empty; event streaming and Ctrl-C cleanup still passed.
 Matter Server remained bound to `127.0.0.1:5580`.
 
-### 4. Resolve friendly names and persist aliases
+### 4. Resolve friendly names and write Matter labels
 
-- [ ] Read applicable Matter labels and resolve unambiguous name targets.
-- [ ] Implement central alias management and the container state mount.
-- [ ] Test duplicate names, multiple endpoints, stale aliases, and atomic writes.
-- [ ] Verify that two CLI clients see the same aliases and that aliases survive
-  service restart and container replacement.
+- [x] Read applicable Matter labels and resolve unambiguous name targets.
+- [x] Add a device label write with a checked Matter status and fresh-read
+  confirmation for node and bridged endpoint labels.
+- [x] Remove application alias management and its container state mount.
+- [x] Validate a label write and named target against the real Govee light.
+
+The Govee H60A6 is node 1. Its root endpoint advertises Basic Information
+`NodeLabel`; endpoint 1 is an ordinary light endpoint, so the node label is
+written at `0/40/5`. Matter labels are owned by the device and may differ from
+Google Home's display name.
+
+The light accepted `Govee H60A6`, confirmed by a fresh read. Named inspection
+and power commands succeeded. The label still resolved after restarting
+matterctl without any service-owned alias state.
+On 2026-11-03, the user identified node 1 as the Den Light and explicitly
+approved writing `Den Light` as its Matter label. The write and fresh read
+succeeded. Its endpoint 1 independently advertises device type 269,
+Extended Color Light, revision 1; a projection bug that displayed type 0 was
+corrected.
 
 ### 5. Implement confirmed on/off control
 
-- [ ] Implement `device power on` and `device power off` with the contract above.
-- [ ] Test acknowledgement before/after state reports, a missing report followed
+- [x] Add `device power on` and `device power off` with supported endpoint
+  selection and fresh-read confirmation.
+- [x] Complete the remaining failure and reconnect cases in the contract above.
+- [x] Test acknowledgement before/after state reports, a missing report followed
   by a successful fresh read, stale cached state, device rejection, and timeout.
-- [ ] Test upstream disconnection during a command without automatic replay.
-- [ ] Verify both CLI commands against the real light using its friendly name.
+- [x] Test upstream disconnection during a command without automatic replay.
+- [x] Verify both CLI commands against the real light using node and endpoint IDs.
+- [x] Verify named on/off after a confirmed Matter label write.
+
+On 2026-11-02, `device power on 1 --endpoint 1` returned a fresh-read
+confirmation. Subsequently, `on`, `off`, and `on` commands each returned
+fresh-read confirmation for the same endpoint through an application alias
+that has since been removed at the user's request. Physical illumination remains
+to be confirmed by the user.
 
 ### 6. Validate and document the complete workflow
 
-- [ ] Run `task validate` and deploy using `task install`.
-- [ ] Check localhost and LAN CLI access to the same service and names.
-- [ ] Verify reconnect recovery, process shutdown, and persistent state after
-  restart without changing Matter Server's loopback binding.
-- [ ] Add a how-to for sharing and controlling the first light, plus a command
+- [x] Run `task validate` and deploy using `task install`.
+- [x] Check localhost and LAN CLI access to the same service.
+- [x] Verify reconnect recovery and process shutdown without changing Matter
+  Server's loopback binding.
+- [x] Add a how-to for sharing and controlling the first light, plus a command
   reference covering output, deadlines, and failure meanings.
-- [ ] Record the actual device model, observed capabilities, and validation
+- [x] Record the actual device model, observed capabilities, and validation
   results without storing sharing codes or network credentials.
+
+`task validate` passed lint, race tests, and build. `task install` deployed the
+service without its former writable alias mount. A service restart resynchronized
+node 1 and retained its device-owned label. The Matter Server API still listened
+only on `127.0.0.1:5580` in the earlier network check.
 
 ## Deferred work
 
@@ -237,7 +256,7 @@ Matter Server remained bound to `127.0.0.1:5580`.
 - `power toggle`, which requires particular care around retries and unknown
   outcomes; the first milestone uses explicit on/off operations.
 - Brightness, color, coverings, locks, and other friendly capability families.
-- Device-label writes, sharing onward to another controller, and decommissioning.
+- Sharing onward to another controller and decommissioning.
 - General attribute writes, raw command invocation, bindings, ACLs, fabric
   administration, firmware, Thread diagnostics, cameras, and ICD management.
 - Fresh-device Bluetooth commissioning and Wi-Fi/Thread credential management.

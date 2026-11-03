@@ -37,6 +37,21 @@ func fixtureNode(t *testing.T, id api.NodeID, label string) node {
 	}}
 }
 
+func TestProjectionReadsNumericDescriptorDeviceTypeFields(t *testing.T) {
+	n := fixtureNode(t, "1", "Den Light")
+	n.Attributes["1/29/0"] = json.RawMessage(`[{"0":269,"1":1}]`)
+	device := project(n)
+	light := device.Endpoints[1]
+	if !light.DescriptorComplete || !slices.Equal(light.DeviceTypes, []api.DeviceType{{ID: 269, Name: "Extended Color Light", Revision: 1}}) {
+		t.Fatalf("numeric Matter descriptor fields were lost: %+v", light.DeviceTypes)
+	}
+	n.Attributes["1/29/0"] = json.RawMessage(`[{"unknown":269}]`)
+	device = project(n)
+	if device.Endpoints[1].DescriptorComplete || len(device.Endpoints[1].DeviceTypes) != 0 {
+		t.Fatalf("malformed device type became an invented ID: %+v", device.Endpoints[1])
+	}
+}
+
 func initializedClient(t *testing.T, nodes ...node) *Client {
 	t.Helper()
 	c, err := New("ws://localhost/ws", slog.New(slog.NewTextHandler(io.Discard, nil)))

@@ -17,7 +17,7 @@ const (
 
 var (
 	ErrInvalidRequest = errors.New("invalid request")
-	ErrBusy           = errors.New("a commissioning request is already waiting for completion")
+	ErrBusy           = errors.New("another request of this kind is already in progress")
 	ErrOutcomeUnknown = errors.New("commissioning outcome unknown; Matter Server may still be working; check device list before retrying")
 )
 
