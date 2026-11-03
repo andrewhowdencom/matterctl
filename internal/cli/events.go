@@ -98,6 +98,7 @@ func printEvent(output io.Writer, event api.Event) error {
 		if err := decode(&update); err != nil {
 			return err
 		}
+		line += deviceIdentity(update.Device.Label, update.Device.Product)
 		line += fmt.Sprintf(" attribute=%s", update.Path)
 		parts := strings.Split(update.Path, "/")
 		if len(parts) == 3 {
@@ -127,6 +128,7 @@ func printEvent(output io.Writer, event api.Event) error {
 		if err := decode(&update); err != nil {
 			return err
 		}
+		line += deviceIdentity(update.Device.Label, update.Device.Product)
 		line += fmt.Sprintf(" endpoint=%d", update.EndpointID)
 		for _, endpoint := range update.Device.Endpoints {
 			if endpoint.ID == update.EndpointID {
@@ -144,12 +146,15 @@ func printEvent(output io.Writer, event api.Event) error {
 			EventID     uint32           `json:"event_id"`
 			EventName   string           `json:"event_name"`
 			EventNumber string           `json:"event_number"`
+			Label       string           `json:"label"`
+			Product     string           `json:"product"`
 			DeviceTypes []api.DeviceType `json:"device_types"`
 			Data        map[string]uint8 `json:"data"`
 		}
 		if err := decode(&update); err != nil {
 			return err
 		}
+		line += deviceIdentity(update.Label, update.Product)
 		line += fmt.Sprintf(" endpoint=%d cluster=%d event=%d", update.EndpointID, update.ClusterID, update.EventID)
 		if update.EventName != "" {
 			line += " name=" + update.EventName
@@ -182,6 +187,8 @@ func deviceSummary(device api.Device) string {
 	line := fmt.Sprintf(" available=%t endpoints=%d", device.Available, len(device.Endpoints))
 	if device.Label != "" {
 		line += fmt.Sprintf(" label=%q", device.Label)
+	} else if device.Product != "" {
+		line += fmt.Sprintf(" product=%q", device.Product)
 	}
 	types := make([]string, 0, len(device.Endpoints))
 	states := make([]string, 0)
@@ -203,6 +210,16 @@ func deviceSummary(device api.Device) string {
 		line += fmt.Sprintf(" states=%q", groupedList(states))
 	}
 	return line
+}
+
+func deviceIdentity(label, product string) string {
+	if label != "" {
+		return fmt.Sprintf(" device=%q", label)
+	}
+	if product != "" {
+		return fmt.Sprintf(" device=%q", product)
+	}
+	return ""
 }
 
 func endpointType(endpoint api.Endpoint) string {

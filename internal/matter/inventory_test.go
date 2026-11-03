@@ -217,7 +217,7 @@ func TestLiveUpdatesRemovalAndEventSanitization(t *testing.T) {
 		t.Fatal("removed state remained cached")
 	}
 	event := apply("node_event", `{"node_id":1,"endpoint_id":2,"cluster_id":59,"event_id":1,"event_number":18446744073709551615,"timestamp":18446744073709551614,"data":{"newPosition":1,"private_key":"must-not-leak"}}`)
-	if strings.Contains(string(event.Data), "must-not-leak") || !strings.Contains(string(event.Data), `"event_number":"18446744073709551615"`) || !strings.Contains(string(event.Data), `"event_name":"initial_press"`) || !strings.Contains(string(event.Data), `"name":"Generic Switch"`) || !strings.Contains(string(event.Data), `"newPosition":1`) {
+	if strings.Contains(string(event.Data), "must-not-leak") || !strings.Contains(string(event.Data), `"event_number":"18446744073709551615"`) || !strings.Contains(string(event.Data), `"event_name":"initial_press"`) || !strings.Contains(string(event.Data), `"label":"Bridge"`) || !strings.Contains(string(event.Data), `"product":"Bridge"`) || !strings.Contains(string(event.Data), `"name":"Generic Switch"`) || !strings.Contains(string(event.Data), `"newPosition":1`) {
 		t.Fatalf("bad event: %s", event.Data)
 	}
 	event = apply("node_event", `{"node_id":1,"endpoint_id":2,"cluster_id":999,"event_id":1,"data":["must-not-leak"]}`)

@@ -341,8 +341,11 @@ func (c *Client) applyEventLocked(frame reply, publish bool) error {
 		}
 		id = event.NodeID
 		var deviceTypes []api.DeviceType
+		var label, product string
 		if n, found := c.nodes[id]; found {
-			for _, endpoint := range project(n).Endpoints {
+			device := project(n)
+			label, product = device.Label, device.Product
+			for _, endpoint := range device.Endpoints {
 				if endpoint.ID == event.EndpointID {
 					deviceTypes = endpoint.DeviceTypes
 					break
@@ -373,9 +376,11 @@ func (c *Client) applyEventLocked(frame reply, publish bool) error {
 			Timestamp     string           `json:"timestamp,omitempty"`
 			TimestampType uint8            `json:"timestamp_type"`
 			Priority      uint8            `json:"priority"`
+			Label         string           `json:"label,omitempty"`
+			Product       string           `json:"product,omitempty"`
 			DeviceTypes   []api.DeviceType `json:"device_types,omitempty"`
 			Data          map[string]uint8 `json:"data"`
-		}{event.EndpointID, event.ClusterID, event.EventID, eventName, event.EventNumber.String(), event.Timestamp.String(), event.TimestampType, event.Priority, deviceTypes, fields}
+		}{event.EndpointID, event.ClusterID, event.EventID, eventName, event.EventNumber.String(), event.Timestamp.String(), event.TimestampType, event.Priority, label, product, deviceTypes, fields}
 	default:
 		return nil
 	}
