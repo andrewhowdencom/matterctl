@@ -59,12 +59,42 @@ tasks:
     cmds:
       - sudo podman build --tag localhost/matterctl:latest --file Containerfile .
 
+  automation:example:
+    desc: Copy the BILRESA and Den example into the XDG automation directory
+    cmds:
+      - |
+        automation_dir="${XDG_CONFIG_HOME:-$HOME/.config}/matterctl/automations"
+        if test -e "$automation_dir/bilresa-den.star"; then
+          echo "Example already exists: $automation_dir/bilresa-den.star" >&2
+          exit 1
+        fi
+        install -D -m 0644 examples/bilresa-den.star "$automation_dir/bilresa-den.star"
+
   install:
-    desc: Validate, build, install the Quadlet, and start or restart matterctl
+    desc: Validate, mount XDG automations, install the Quadlet, and restart matterctl
     cmds:
       - task: validate
+      - |
+        automation_dir="${XDG_CONFIG_HOME:-$HOME/.config}/matterctl/automations"
+        case "$automation_dir" in
+          /*) ;;
+          *) echo "XDG_CONFIG_HOME must be absolute" >&2; exit 1 ;;
+        esac
+        case "$automation_dir" in
+          *:*) echo "automation directory cannot contain a colon" >&2; exit 1 ;;
+        esac
+        install -d -m 0755 "$automation_dir"
+        ./bin/matterctl automation check --automation.directory "$automation_dir"
       - task: container:build
-      - sudo install -D -m 0644 deploy/matterctl.container /etc/containers/systemd/matterctl.container
-      - sudo systemctl daemon-reload
-      - sudo systemctl restart matterctl.service
-      - sudo systemctl is-active --quiet matterctl.service
+      - |
+        automation_dir="${XDG_CONFIG_HOME:-$HOME/.config}/matterctl/automations"
+        generated="$(mktemp)"
+        trap 'rm -f "$generated"' EXIT
+        awk -v source="$automation_dir" '
+          /^\[Container\]$/ { print; print "Volume=" source ":/config/matterctl/automations:ro"; next }
+          { print }
+        ' deploy/matterctl.container > "$generated"
+        sudo install -D -m 0644 "$generated" /etc/containers/systemd/matterctl.container
+        sudo systemctl daemon-reload
+        sudo systemctl restart matterctl.service
+        sudo systemctl is-active --quiet matterctl.service

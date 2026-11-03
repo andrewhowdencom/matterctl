@@ -9,6 +9,7 @@ require (
 	github.com/spf13/viper v1.21.0
 	go.opentelemetry.io/otel v1.47.0
 	go.opentelemetry.io/otel/trace v1.47.0
+	go.starlark.net v0.0.0-20261021141710-4f4267fb140d
 )
 
 require (
@@ -29,6 +30,6 @@ require (
 	go.opentelemetry.io/otel/log v1.47.0 // indirect
 	go.opentelemetry.io/otel/metric v1.47.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
-	golang.org/x/sys v0.29.0 // indirect
+	golang.org/x/sys v0.42.0 // indirect
 	golang.org/x/text v0.28.0 // indirect
 )
