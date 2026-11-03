@@ -287,10 +287,11 @@ func (c *Client) applyEventLocked(frame reply, publish bool) error {
 			break
 		}
 		data = struct {
-			Path   string     `json:"path"`
-			Device api.Device `json:"device"`
-			State  *api.State `json:"state,omitempty"`
-		}{path, device, state}
+			Path          string     `json:"path"`
+			AttributeName string     `json:"attribute_name,omitempty"`
+			Device        api.Device `json:"device"`
+			State         *api.State `json:"state,omitempty"`
+		}{path, attributeName(clusterID, attributeID), device, state}
 	case "endpoint_added", "endpoint_removed":
 		var update struct {
 			NodeID     api.NodeID `json:"node_id"`
