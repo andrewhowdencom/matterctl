@@ -5,7 +5,8 @@ A Go CLI and browser interface for local automation through OHF Matter Server.
 the connection, discover and commission shared devices, inspect their capabilities,
 set and confirm on/off state, write Matter labels, and watch live events.
 The browser page lists commissioned devices and their reported state, updating
-as Matter Server sends changes.
+as Matter Server sends changes. It can also add an already-networked Matter
+device using a fresh sharing code.
 
 See the [implementation plan](PLAN.md) for the agreed direction, proposed
 commands, and milestones toward controlling the first light.
@@ -112,6 +113,8 @@ The browser device list and `/healthz` remain available when Matter Server is
 down; `server info` and `device list` report
 upstream failures and exit nonzero. Event streams report connection changes and
 receive a replacement inventory after reconnect. The local API has no authentication.
+Browser commissioning requires a live Matter Server connection. Anyone with
+access to this local HTTP service can use its commissioning API.
 
 ```sh
 sudo systemctl status matterctl.service

@@ -5,6 +5,26 @@ device must support Matter directly or through a Matter bridge and be reachable
 from the Matter Server host over its existing IP network. Merely appearing in
 Google Home does not establish Matter support.
 
+## From the browser
+
+1. Open matterctl's device page on the home LAN. Wait until the connection shows
+   **Live**, then select **Add device**.
+2. In Google Home, open the selected device's settings and its Matter sharing
+   option (often **Linked Matter apps & services**). Obtain a fresh pairing code
+   while the sharing window is open. Leave the device on its existing network.
+3. Paste or type the manual code, or paste an `MT:` QR payload, then select
+   **Add device** in the form. Keep the page open while Matter Server works.
+4. On success, the page shows the new node ID and refreshes the device list.
+   Check that the device is present and remains usable in Google Home.
+
+If you select **Stop waiting**, close the page, lose the connection, or reach a
+timeout, the result may be unknown. Matter Server may still finish adding the
+device. Check the device list and the device itself before trying again. The
+browser never retries automatically. The web flow does not use the camera or
+provision a fresh device over Bluetooth, Wi-Fi, or Thread.
+
+## From the CLI
+
 1. Check `./bin/matterctl server info` and `./bin/matterctl device list`.
 2. In Google Home, open the selected device's settings and its Matter sharing
    option (often **Linked Matter apps & services**). Open a sharing window and

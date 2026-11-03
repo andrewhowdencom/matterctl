@@ -1,5 +1,56 @@
 const initialState = () => ({ inventory: null, status: "loading" });
 
+export function validCommissionCode(value) {
+  const code = value.trim();
+  if (!code || code.length > 1024) return false;
+  if (code.startsWith("MT:")) return /^MT:[0-9A-Z.-]+$/.test(code);
+  const digits = code.replace(/[ -]/g, "");
+  return (digits.length === 11 || digits.length === 21) && /^[0-9]+$/.test(digits);
+}
+
+export async function submitCommission(code, signal, fetchImpl = fetch) {
+  const response = await fetchImpl("/api/v1/devices/commission", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code, network_only: true }),
+    credentials: "same-origin",
+    cache: "no-store",
+    redirect: "error",
+    signal,
+  });
+  let data;
+  try {
+    data = await response.json();
+  } catch {
+    data = null;
+  }
+  return { status: response.status, data };
+}
+
+export function commissionOutcome(result) {
+  if (result.status === 200 && typeof result.data?.node_id === "string" && result.data.node_id) {
+    return { kind: "success", message: `${deviceName(result.data)} was added as node ${result.data.node_id}.` };
+  }
+  if (result.status === 400) return { kind: "invalid", message: "That sharing code was not accepted. Check it or obtain a fresh code." };
+  if (result.status === 403) return { kind: "forbidden", message: "This page is not allowed to add devices from its current address. Open matterctl directly on the local network." };
+  if (result.status === 409) return { kind: "busy", message: "Another device is being added. Check the device list before trying again." };
+  if (result.status === 503) return { kind: "unavailable", message: "Matter Server is unavailable or synchronizing. Wait for the connection to recover." };
+  if (result.status === 502 && typeof result.data?.error === "string" &&
+    !result.data.error.includes("commissioning outcome unknown")) {
+    return { kind: "rejected", message: "Matter Server rejected this attempt. Check the device and sharing window, then check the device list before trying again." };
+  }
+  return { kind: "uncertain", message: "The result is unknown. Matter Server may still be adding the device. Check the device list before trying again." };
+}
+
+export function beginCommission(code, { fetchImpl = fetch, timeoutMs = 5 * 60 * 1000 + 15 * 1000 } = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const result = submitCommission(code, controller.signal, fetchImpl)
+    .then(commissionOutcome, () => commissionOutcome({ status: 0 }))
+    .finally(() => clearTimeout(timer));
+  return { result, stop: () => { clearTimeout(timer); controller.abort(); } };
+}
+
 export function applyInventory(state, inventory) {
   return {
     inventory,
@@ -199,7 +250,95 @@ function render(state) {
 async function start() {
   let state = initialState();
   let closed = false;
-  render(state);
+  let commissionPending = false;
+  let commissionAttempt = 0;
+  let commissionOperation;
+  let commissionMessage = null;
+  const addButton = document.querySelector("#add-device");
+  const panel = document.querySelector("#commission-panel");
+  const form = document.querySelector("#commission-form");
+  const codeInput = document.querySelector("#commission-code");
+  const submitButton = document.querySelector("#commission-submit");
+  const stopButton = document.querySelector("#commission-stop");
+  const closeButton = document.querySelector("#commission-close");
+  const revealButton = document.querySelector("#commission-reveal");
+  const status = document.querySelector("#commission-status");
+
+  function renderAll() {
+    render(state);
+    addButton.disabled = state.status !== "ready" || commissionPending;
+    submitButton.disabled = state.status !== "ready" || commissionPending;
+    closeButton.disabled = commissionPending;
+    stopButton.hidden = !commissionPending;
+    status.hidden = !commissionMessage;
+    status.className = `commission-status${commissionMessage ? ` commission-${commissionMessage.kind}` : ""}`;
+    status.textContent = commissionMessage?.message || "";
+  }
+
+  function clearCode() {
+    codeInput.value = "";
+    codeInput.type = "password";
+    revealButton.textContent = "Show";
+    revealButton.setAttribute("aria-pressed", "false");
+  }
+
+  addButton.addEventListener("click", () => {
+    panel.hidden = false;
+    addButton.setAttribute("aria-expanded", "true");
+    codeInput.focus();
+  });
+  closeButton.addEventListener("click", () => {
+    panel.hidden = true;
+    addButton.setAttribute("aria-expanded", "false");
+    commissionMessage = null;
+    clearCode();
+    renderAll();
+    addButton.focus();
+  });
+  revealButton.addEventListener("click", () => {
+    const visible = codeInput.type === "password";
+    codeInput.type = visible ? "text" : "password";
+    revealButton.textContent = visible ? "Hide" : "Show";
+    revealButton.setAttribute("aria-pressed", String(visible));
+  });
+  stopButton.addEventListener("click", () => {
+    if (!commissionPending) return;
+    commissionAttempt++;
+    commissionPending = false;
+    commissionOperation.stop();
+    commissionMessage = commissionOutcome({ status: 0 });
+    renderAll();
+    status.focus();
+    void refresh();
+  });
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (commissionPending || state.status !== "ready") return;
+    const code = codeInput.value.trim();
+    if (!validCommissionCode(code)) {
+      commissionMessage = { kind: "invalid", message: "Enter an 11- or 21-digit manual code, or a complete MT: QR payload." };
+      renderAll();
+      codeInput.focus();
+      return;
+    }
+    const attempt = ++commissionAttempt;
+    commissionPending = true;
+    const operation = beginCommission(code);
+    commissionOperation = operation;
+    commissionMessage = { kind: "waiting", message: "Waiting for Matter Server to add the device. This can take up to five minutes." };
+    clearCode();
+    renderAll();
+    stopButton.focus();
+    const outcome = await operation.result;
+    if (attempt !== commissionAttempt) return;
+    commissionPending = false;
+    commissionMessage = outcome;
+    renderAll();
+    status.focus();
+    await refresh();
+  });
+
+  renderAll();
 
   async function refresh() {
     try {
@@ -209,7 +348,7 @@ async function start() {
     } catch {
       state = { ...state, status: "unreachable" };
     }
-    render(state);
+    renderAll();
   }
 
   async function listen() {
@@ -227,7 +366,7 @@ async function start() {
       if (!response.ok || !response.body) throw new Error("Event stream unavailable");
       await consumeNDJSON(response.body, (event) => {
         state = applyEvent(state, event);
-        render(state);
+        renderAll();
       }, resetWatchdog);
     } finally {
       clearTimeout(watchdog);
@@ -243,7 +382,7 @@ async function start() {
     } catch {
       if (closed) break;
       state = { ...state, status: state.inventory ? "stale" : "unreachable" };
-      render(state);
+      renderAll();
     }
     if (closed) break;
     await new Promise((resolve) => setTimeout(resolve, 1500));

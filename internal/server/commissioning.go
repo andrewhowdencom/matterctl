@@ -8,7 +8,12 @@ import (
 	"log/slog"
 	"mime"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
+
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 
 	"github.com/andrewhowdencom/matterctl/internal/api"
 )
@@ -34,6 +39,18 @@ func addCommissioningRoutes(mux *http.ServeMux, o options, logger *slog.Logger) 
 	mux.HandleFunc("POST "+api.CommissionPath, func(w http.ResponseWriter, r *http.Request) {
 		ctx, span := requestSpan(r, o, "commission-device", api.CommissionPath)
 		defer span.End()
+		if !sameOriginCommissionRequest(r) {
+			const message = "cross-origin commissioning request rejected"
+			span.SetAttributes(attribute.Int("http.response.status_code", http.StatusForbidden))
+			span.SetStatus(codes.Error, message)
+			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Cache-Control", "no-store")
+			w.WriteHeader(http.StatusForbidden)
+			if err := json.NewEncoder(w).Encode(api.ErrorResponse{Error: message}); err != nil {
+				logger.Debug("write commissioning rejection", "error", err)
+			}
+			return
+		}
 		controller := http.NewResponseController(w)
 		_ = controller.SetReadDeadline(time.Now().Add(10 * time.Second))
 		request, err := readCommissionRequest(w, r)
@@ -55,6 +72,28 @@ func addCommissioningRoutes(mux *http.ServeMux, o options, logger *slog.Logger) 
 		}
 		jsonResponse(w, logger, span, response, err)
 	})
+}
+
+// Browsers supply Origin on JSON POSTs. Requests without it remain available to
+// non-browser clients such as the CLI; their existing API contract is unchanged.
+func sameOriginCommissionRequest(r *http.Request) bool {
+	origins := r.Header.Values("Origin")
+	if len(origins) == 0 {
+		return true
+	}
+	if len(origins) != 1 {
+		return false
+	}
+	origin := origins[0]
+	parsed, err := url.Parse(origin)
+	if err != nil || parsed.Host == "" || parsed.User != nil || parsed.Path != "" || parsed.RawQuery != "" || parsed.Fragment != "" || parsed.String() != origin {
+		return false
+	}
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
+	}
+	return parsed.Scheme == scheme && strings.EqualFold(parsed.Host, r.Host)
 }
 
 func readCommissionRequest(w http.ResponseWriter, r *http.Request) (api.CommissionRequest, error) {

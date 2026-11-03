@@ -32,10 +32,34 @@ h1 { margin-bottom: 14px; font-size: clamp(42px, 5.8vw, 76px); line-height: 1.04
 .connection-stale { background: #f7ead8; color: #8b5d28; }
 .connection-error { background: #f7e8e3; color: #975441; }
 
+.commission-panel { max-width: 760px; margin: -24px 0 56px; padding: 28px; border: 1px solid #cbd9c9; border-radius: 17px; background: #fff; box-shadow: 0 10px 32px rgba(44, 68, 48, .07); }
+.commission-panel[hidden] { display: none; }
+.commission-heading { display: flex; align-items: start; justify-content: space-between; gap: 16px; }
+.commission-heading h2 { margin-bottom: 15px; }
+.commission-panel > p { color: #56665b; line-height: 1.6; }
+.commission-panel label { display: block; margin: 24px 0 8px; color: #314238; font-size: 14px; font-weight: 700; }
+.commission-input-row { display: flex; align-items: center; gap: 10px; }
+.commission-input-row input { width: 100%; min-width: 0; padding: 12px 14px; border: 1px solid #aabdae; border-radius: 8px; background: #fff; color: #202821; font: inherit; font-size: 16px; }
+.commission-input-row input:focus-visible { outline: 3px solid #71a682; outline-offset: 2px; }
+.field-help { margin: 8px 0 0; color: #718074; font-size: 13px; line-height: 1.5; }
+.commission-actions { display: flex; align-items: center; gap: 14px; margin-top: 22px; }
+.primary-button { padding: 11px 18px; border: 0; border-radius: 8px; background: #345e41; color: white; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+.primary-button:hover:not(:disabled) { background: #254b32; }
+.primary-button:disabled { background: #cad4ca; color: #5a6d5e; cursor: not-allowed; }
+.text-button { padding: 8px; border: 0; background: transparent; color: #345e41; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+.text-button:hover:not(:disabled) { text-decoration: underline; }
+.text-button:disabled { color: #89978b; cursor: not-allowed; }
+.primary-button:focus-visible, .text-button:focus-visible { outline: 3px solid #71a682; outline-offset: 3px; }
+.commission-status { margin-top: 20px; padding: 14px 16px; border: 1px solid #d7e1d2; border-radius: 10px; background: #f3f8ef; color: #315c3e; line-height: 1.5; }
+.commission-status[hidden] { display: none; }
+.commission-waiting, .commission-uncertain, .commission-unavailable, .commission-busy { border-color: #eddab6; background: #fff8ec; color: #755526; }
+.commission-invalid, .commission-rejected, .commission-forbidden { border-color: #e8c8bd; background: #fff4f0; color: #844b39; }
+
 .inventory { padding-bottom: 90px; }
 .section-heading { display: flex; justify-content: space-between; align-items: end; gap: 20px; padding-bottom: 19px; border-bottom: 1px solid #d8dcd3; }
 .section-heading .eyebrow { margin-bottom: 8px; }
 h2 { margin-bottom: 0; font-size: 24px; letter-spacing: -.045em; font-weight: 690; }
+.section-actions { display: flex; align-items: center; gap: 12px; }
 .device-count { min-width: 34px; padding: 6px 11px; border: 1px solid #d9ded5; border-radius: 999px; background: #f9faf5; color: #557061; text-align: center; font-size: 13px; font-weight: 680; }
 .notice { margin-top: 20px; padding: 16px 19px; background: #fff8ec; color: #755526; border: 1px solid #eddab6; border-radius: 12px; line-height: 1.5; }
 .notice[hidden] { display: none; }
@@ -79,6 +103,10 @@ a:focus-visible { outline: 3px solid #71a682; outline-offset: 3px; }
   .intro { display: block; padding: 48px 0 44px; }
   .intro-copy { font-size: 14px; }
   .connection { margin-top: 28px; }
+  .commission-panel { margin: 0 0 42px; padding: 20px; }
+  .commission-heading h2 { font-size: 21px; }
+  .commission-input-row { align-items: stretch; }
+  .section-actions { gap: 8px; }
   .inventory { padding-bottom: 64px; }
   .device-grid { grid-template-columns: 1fr; }
   .site-footer { flex-direction: column; gap: 5px; }
