@@ -108,7 +108,7 @@ service-side `observed_at`, optional string `node_id`, and `data`:
 | `node_removed` | String node ID |
 | `attribute_updated` | Attribute path, updated projected device, and optional decoded `state` |
 | `endpoint_added`, `endpoint_removed` | Endpoint ID and updated projected device |
-| `node_event` | Endpoint/cluster/event IDs, standard Switch event name when known, counter/timestamp strings, timestamp type, priority, and selected event fields |
+| `node_event` | Endpoint/cluster/event IDs, node label and product when known, standard Switch event name when known, counter/timestamp strings, timestamp type, priority, and selected event fields |
 | `heartbeat` | Empty object, every 15 seconds |
 | `stream_error` | Stream interrupted; restart to obtain a new snapshot |
 
@@ -132,8 +132,11 @@ restart watch to receive a new initial snapshot. Existing streams remain open
 across upstream reconnects and receive a replacement inventory.
 
 The CLI's text output uses one compact line per event and omits the projected
-device objects. For `attribute_updated`, it shows the numeric attribute path,
-endpoint type, and decoded state when available. A cleared known value appears
+device objects. `node` is the commissioned Matter node ID; device changes also
+show `device` from the Matter label, falling back to the product name. The node
+ID distinguishes devices with the same name. For `attribute_updated`, it shows
+the numeric attribute path, endpoint type, and decoded state when available.
+A cleared known value appears
 as `unknown`. Unknown attributes retain their numeric path without exposing the
 raw value. For `node_event`, it shows endpoint, cluster, event ID, known Switch
 event name, event number, and supported Switch fields. JSON output retains the

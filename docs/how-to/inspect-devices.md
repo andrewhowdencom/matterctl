@@ -52,10 +52,10 @@ per line, suitable for scripts. Text mode writes compact lines, for example:
 
 ```text
 2026-11-03T12:30:00Z inventory node=12 connection=connected ready=true devices=1 available=true endpoints=1 label="Couch lamp" types="Extended Color Light" states="power=off"
-2026-11-03T12:30:04Z attribute_updated node=12 attribute=1/6/0 endpoint=1 label="Light" type="Extended Color Light" power=on
+2026-11-03T12:30:04Z attribute_updated node=12 device="Couch lamp" attribute=1/6/0 endpoint=1 label="Light" type="Extended Color Light" power=on
 2026-11-03T12:31:02Z attribute_updated node=15 attribute=1/1030/0 endpoint=1 type="Occupancy Sensor" occupancy=occupied
 2026-11-03T12:31:05Z attribute_updated node=16 attribute=1/1026/0 endpoint=1 type="Temperature Sensor" temperature=21.50°C
-2026-11-03T12:31:09Z node_event node=2 endpoint=2 cluster=59 event=1 name=initial_press type="Generic Switch" number=42 new_position=1
+2026-11-03T12:31:09Z node_event node=2 device="BILRESA scroll wheel" endpoint=2 cluster=59 event=1 name=initial_press type="Generic Switch" number=42 new_position=1
 ```
 
 Text mode shows the advertised endpoint type and recognized power, level,
@@ -65,6 +65,9 @@ for types repeated across endpoints. Other attribute
 updates show their numeric path without a full device snapshot; `--output json`
 contains the full projected event, but unrecognized raw values are deliberately
 omitted. Text mode suppresses heartbeat messages. Press Ctrl-C to stop normally.
+`node` is the commissioned Matter node ID. On device changes, `device` uses the
+node's Matter label when present, or its product name otherwise. The node ID
+remains the unique identifier when names are absent or duplicated.
 
 During an upstream disconnection, the stream reports connection changes. It
 receives a replacement inventory after reconnect. `device list` returns a
