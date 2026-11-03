@@ -1,13 +1,13 @@
 # matterctl architecture
 
-matterctl is a service with a CLI client and an eventual browser interface.
+matterctl is a service with a CLI client and a read-only browser device list.
 The service owns one persistent OHF Matter Server WebSocket connection. CLI
 commands use the HTTP API, including when the CLI runs on the same host.
 
 ```mermaid
 flowchart LR
     CLI[CLI] --> HTTP[matterctl HTTP API]
-    Browser[Future browser controls] --> HTTP
+    Browser[Browser device list] --> HTTP
     HTTP --> Source[InfoSource interface]
     Source --> Matter[Matter Server adapter]
     Matter --> WS[OHF Matter Server WebSocket API]
@@ -21,7 +21,7 @@ flowchart LR
 | `internal/cli` | Cobra commands, Viper configuration, human/JSON output |
 | `internal/client` | Context-aware HTTP API client |
 | `internal/api` | Shared types and small source interfaces |
-| `internal/server` | HTTP API and browser placeholder |
+| `internal/server` | HTTP API and embedded browser assets |
 | `internal/matter` | WebSocket session, inventory, capability projection, subscriptions, and commissioning |
 | `internal/app` | Adapter construction and coordinated lifetimes |
 
@@ -33,6 +33,12 @@ The Matter adapter resolves exact node and bridged endpoint labels for
 inspection, event filtering, and control. It writes supported Matter NodeLabel
 attributes and confirms them with a fresh read. Numeric node and endpoint IDs
 remain available for disambiguation. Matter Server owns label persistence.
+
+The browser assets are embedded in the Go binary. The page reads the inventory
+endpoint and the unfiltered NDJSON event stream from the same origin. Stream
+snapshots replace the local view; node and endpoint updates reconcile by ID.
+After a stream interruption or Matter Server disconnect, the page marks cached
+states as stale until a new inventory snapshot is received.
 
 ## Connection lifecycle
 

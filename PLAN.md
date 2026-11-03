@@ -20,7 +20,7 @@ acknowledgement alone does not complete it.
 | Area | Decision |
 | --- | --- |
 | Execution | CLI requests go through the running matterctl service. The service owns the Matter Server connection. |
-| Browser UI | Eventually uses the same application API as the CLI. Its current placeholder can remain during this milestone. |
+| Browser UI | Uses the same application API as the CLI. The first screen is a read-only device list. |
 | Command structure | Categories followed by verbs, including `device power on` and `device power off`. |
 | Capabilities | Determine supported operations from endpoint capabilities, features, and accepted commands. Device types provide context and presentation. |
 | Friendly names | Use writable Matter NodeLabel attributes; use node IDs when names are unavailable or ambiguous. |
@@ -34,7 +34,7 @@ acknowledgement alone does not complete it.
 ```text
 CLI -------------------+
                        |
-Future browser UI -----+--> matterctl service --> OHF Matter Server --> devices
+Browser UI ------------+--> matterctl service --> OHF Matter Server --> devices
                             HTTP API              WebSocket API
                             LAN, port 8081         127.0.0.1:5580/ws
 ```
@@ -251,7 +251,7 @@ only on `127.0.0.1:5580` in the earlier network check.
 
 ## Deferred work
 
-- Browser controls beyond the current placeholder page.
+- Browser controls beyond the read-only device list.
 - Button-to-light automation, schedules, scenes, rules, and activity history.
 - `power toggle`, which requires particular care around retries and unknown
   outcomes; the first milestone uses explicit on/off operations.

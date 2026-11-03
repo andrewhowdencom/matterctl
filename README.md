@@ -4,16 +4,19 @@ A Go CLI and browser interface for local automation through OHF Matter Server.
 `serve` connects to Matter Server and exposes an HTTP API. The CLI can inspect
 the connection, discover and commission shared devices, inspect their capabilities,
 set and confirm on/off state, write Matter labels, and watch live events.
-The browser page displays **unimplemented**.
+The browser page lists commissioned devices and their reported state, updating
+as Matter Server sends changes.
 
 See the [implementation plan](PLAN.md) for the agreed direction, proposed
 commands, and milestones toward controlling the first light.
+See [browser requirements](WEB_REQUIREMENTS.md) for the first device-list screen.
 See [user documentation](docs/index.md) for connection checks and the API
 reference, and [architecture](ARCHITECTURE.md) for application boundaries.
 
 ## Development
 
-Prerequisites: Go 1.26.2 or newer, a C compiler for race tests,
+Prerequisites: Go 1.26.2 or newer, Node.js 20 or newer for browser tests,
+a C compiler for race tests,
 [Task](https://taskfile.dev/), and
 [golangci-lint v2](https://golangci-lint.run/docs/welcome/install/) with support
 for the installed Go version. Deployment also requires Podman with Quadlet,
@@ -105,7 +108,7 @@ The image runs the binary as UID/GID `65532:65532`, with a read-only filesystem
 and no Linux capabilities. It uses host networking to reach
 Matter Server's loopback-only API at `ws://127.0.0.1:5580/ws`. The installed
 service listens on port 8081. The container filesystem remains read-only.
-The browser placeholder and `/healthz` remain available when Matter Server is
+The browser device list and `/healthz` remain available when Matter Server is
 down; `server info` and `device list` report
 upstream failures and exit nonzero. Event streams report connection changes and
 receive a replacement inventory after reconnect. The local API has no authentication.
