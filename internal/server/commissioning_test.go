@@ -71,6 +71,44 @@ func TestCommissionHTTPRejectsInvalidBodiesWithoutEchoingSecrets(t *testing.T) {
 	}
 }
 
+func TestCommissionHTTPChecksBrowserOrigin(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	called := 0
+	source := commissioningStub{commission: func(context.Context, api.CommissionRequest) (api.Device, error) {
+		called++
+		return api.Device{NodeID: "1"}, nil
+	}}
+	for _, tt := range []struct {
+		name, url, origin string
+		wantCode          int
+	}{
+		{"same origin", "http://matterctl.local:8081" + api.CommissionPath, "http://matterctl.local:8081", http.StatusOK},
+		{"HTTPS same origin", "https://matterctl.local" + api.CommissionPath, "https://matterctl.local", http.StatusOK},
+		{"CLI without origin", "http://matterctl.local:8081" + api.CommissionPath, "", http.StatusOK},
+		{"other host", "http://matterctl.local:8081" + api.CommissionPath, "http://elsewhere.local:8081", http.StatusForbidden},
+		{"other scheme", "http://matterctl.local:8081" + api.CommissionPath, "https://matterctl.local:8081", http.StatusForbidden},
+		{"null origin", "http://matterctl.local:8081" + api.CommissionPath, "null", http.StatusForbidden},
+		{"origin with path", "http://matterctl.local:8081" + api.CommissionPath, "http://matterctl.local:8081/other", http.StatusForbidden},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodPost, tt.url, strings.NewReader(`{"code":"35325335079","network_only":true}`))
+			request.Header.Set("Content-Type", "application/json")
+			if tt.origin != "" {
+				request.Header.Set("Origin", tt.origin)
+			}
+			response := httptest.NewRecorder()
+			before := called
+			handler(logger, WithCommissioning(source)).ServeHTTP(response, request)
+			if response.Code != tt.wantCode || (called > before) != (tt.wantCode == http.StatusOK) {
+				t.Fatalf("status=%d called=%d body=%s", response.Code, called-before, response.Body.String())
+			}
+			if response.Header().Get("Cache-Control") != "no-store" || !json.Valid(response.Body.Bytes()) || strings.Contains(response.Body.String(), "35325335079") {
+				t.Fatalf("unsafe response: headers=%v body=%s", response.Header(), response.Body.String())
+			}
+		})
+	}
+}
+
 func TestCommissionHTTPWaitsBeyondOrdinaryTimeouts(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	source := commissioningStub{

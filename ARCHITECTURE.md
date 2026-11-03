@@ -1,13 +1,14 @@
 # matterctl architecture
 
-matterctl is a service with a CLI client and a read-only browser device list.
+matterctl is a service with a CLI client and a browser device list with
+network-only commissioning.
 The service owns one persistent OHF Matter Server WebSocket connection. CLI
 commands use the HTTP API, including when the CLI runs on the same host.
 
 ```mermaid
 flowchart LR
     CLI[CLI] --> HTTP[matterctl HTTP API]
-    Browser[Browser device list] --> HTTP
+    Browser[Browser device list and commissioning] --> HTTP
     HTTP --> Source[InfoSource interface]
     Source --> Matter[Matter Server adapter]
     Matter --> WS[OHF Matter Server WebSocket API]
@@ -39,6 +40,9 @@ endpoint and the unfiltered NDJSON event stream from the same origin. Stream
 snapshots replace the local view; node and endpoint updates reconcile by ID.
 After a stream interruption or Matter Server disconnect, the page marks cached
 states as stale until a new inventory snapshot is received.
+Its commissioning panel sends a single same-origin JSON request and refreshes
+inventory after the result. Stopping the browser wait cannot establish that
+Matter Server stopped commissioning.
 
 ## Connection lifecycle
 
@@ -133,6 +137,8 @@ They bypass configuration and never enter logs, trace attributes, or events.
 Upstream errors retain numeric codes and allowlisted reasons, with arbitrary
 details discarded. HTTP commission bodies require JSON and reject unknown fields.
 The HTTP client rejects redirects to avoid forwarding or replaying request bodies.
+The commission endpoint rejects a browser request whose Origin differs from
+its scheme and Host. Requests without Origin remain available to CLI clients.
 
 ## Observability
 

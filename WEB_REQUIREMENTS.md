@@ -76,7 +76,20 @@ not prove every attribute was freshly read at that moment.
 
 ## Later decisions
 
-This increment is for viewing. On/off controls, device inspection, brightness,
-colour, button event history, commissioning, and automation controls can be
+The viewing increment above is implemented. On/off controls, device inspection,
+brightness, colour, button event history, and automation controls can be
 specified separately. The existing power API can support controls when their
 interaction and confirmation feedback are defined.
+
+## Add device: commissioning increment
+
+On the device page, **Add device** opens an inline form for a fresh manual
+sharing code or pasted `MT:` payload from an already-networked Matter device.
+The form is available only while inventory is ready. It submits once to
+`POST /api/v1/devices/commission` with `network_only: true`; it does not retain
+the code, follow redirects, or retry automatically. There is no camera scan or
+discovery list. Success identifies the new node and refreshes the inventory.
+The waiting state offers **Stop waiting**. Stopping, a connection failure, or a
+timeout can leave the outcome unknown; the page directs the user to inspect the
+device list before another attempt. Input errors, another active commission,
+upstream rejection, and Matter Server unavailability have distinct feedback.

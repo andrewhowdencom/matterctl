@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { applyEvent, applyInventory, consumeNDJSON, deviceName, deviceType, endpointState } from "./app.mjs";
+import { applyEvent, applyInventory, beginCommission, commissionOutcome, consumeNDJSON, deviceName, deviceType, endpointState, submitCommission, validCommissionCode } from "./app.mjs";
 
 const denLight = {
   node_id: "1",
@@ -62,4 +62,61 @@ test("NDJSON stream handles split frames and reports interruption", async () => 
     },
   });
   await assert.rejects(consumeNDJSON(interrupted, () => {}), /interrupted/);
+});
+
+test("commission codes accept supported shapes without validating their checksum", () => {
+  for (const code of ["35325335079", "3532-533-5079", "  3532 533 5079  ", "123456789012345678901", "MT:ABC123.-"]) {
+    assert.equal(validCommissionCode(code), true, code);
+  }
+  for (const code of ["", "3532533507", "3532533507x", "mt:ABC123", "MT:", "MT:abc", "1".repeat(1025)]) {
+    assert.equal(validCommissionCode(code), false, code);
+  }
+});
+
+test("commission request posts one code on the same origin without following redirects", async () => {
+  const calls = [];
+  const result = await submitCommission("35325335079", undefined, async (path, options) => {
+    calls.push({ path, options });
+    return { status: 200, json: async () => ({ node_id: "18446744069414584320", label: "Lamp" }) };
+  });
+  assert.deepEqual(result, { status: 200, data: { node_id: "18446744069414584320", label: "Lamp" } });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].path, "/api/v1/devices/commission");
+  assert.equal(calls[0].options.method, "POST");
+  assert.equal(calls[0].options.headers["Content-Type"], "application/json");
+  assert.equal(calls[0].options.redirect, "error");
+  assert.equal(calls[0].options.credentials, "same-origin");
+  assert.deepEqual(JSON.parse(calls[0].options.body), { code: "35325335079", network_only: true });
+});
+
+test("commission outcomes distinguish success, input, busy, unavailable, rejection, and uncertainty", () => {
+  assert.deepEqual(commissionOutcome({ status: 200, data: { node_id: "9", label: "Lamp" } }), { kind: "success", message: "Lamp was added as node 9." });
+  assert.equal(commissionOutcome({ status: 400 }).kind, "invalid");
+  assert.equal(commissionOutcome({ status: 403 }).kind, "forbidden");
+  assert.equal(commissionOutcome({ status: 409 }).kind, "busy");
+  assert.equal(commissionOutcome({ status: 503 }).kind, "unavailable");
+  assert.equal(commissionOutcome({ status: 502, data: { error: "passcode-mismatch" } }).kind, "rejected");
+  assert.equal(commissionOutcome({ status: 502, data: { error: "commissioning outcome unknown" } }).kind, "uncertain");
+  assert.equal(commissionOutcome({ status: 502, data: { error: 42 } }).kind, "uncertain");
+  assert.equal(commissionOutcome({ status: 504 }).kind, "uncertain");
+  assert.equal(commissionOutcome({ status: 200, data: {} }).kind, "uncertain");
+});
+
+test("stopping a commission wait aborts the request and reports uncertainty", async () => {
+  let aborted = false;
+  const fetchImpl = (_path, { signal }) => new Promise((_resolve, reject) => {
+    signal.addEventListener("abort", () => { aborted = true; reject(new Error("aborted")); }, { once: true });
+  });
+  const operation = beginCommission("35325335079", { fetchImpl });
+  operation.stop();
+  assert.equal((await operation.result).kind, "uncertain");
+  assert.equal(aborted, true);
+});
+
+test("a stalled commission wait reaches the browser deadline", async () => {
+  const fetchImpl = (_path, { signal }) => new Promise((_resolve, reject) => {
+    signal.addEventListener("abort", () => reject(new Error("timed out")), { once: true });
+  });
+  const operation = beginCommission("35325335079", { fetchImpl, timeoutMs: 1 });
+  assert.equal((await operation.result).kind, "uncertain");
 });

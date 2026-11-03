@@ -4,6 +4,14 @@ Both commands call the running matterctl HTTP service. They require its current
 Matter Server session to have synchronized inventory. `--server.url` and
 `--output text|json` work as on other device commands.
 
+The browser device page also has **Add device** for network-only commissioning
+with a fresh manual sharing code or pasted `MT:` payload. The button is disabled
+while inventory is unavailable or synchronizing. The browser does not scan for
+devices or use the camera. The API uses a five-minute default deadline; the
+browser allows 15 more seconds for a response and refreshes inventory after a
+result. **Stop waiting** cancels the browser request, but the outcome may
+remain unknown; check the device list before trying again.
+
 ## Commands
 
 | Command | Behavior |
@@ -56,6 +64,9 @@ maximum body size of 4096 bytes. Unknown fields are rejected. Example shape:
 Codes belong only in the request body, never in URLs. Clients must not follow
 redirects or retry a commission request automatically. The supplied Go client
 does neither. All responses use `Cache-Control: no-store`.
+Browser requests to the commission endpoint must have an Origin matching the
+request's scheme and Host, or receive HTTP 403. Requests without Origin remain
+valid for non-browser clients.
 
 Errors use `{ "error": "..." }` and a non-success status:
 

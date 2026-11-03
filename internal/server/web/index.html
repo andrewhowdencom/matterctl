@@ -31,13 +31,40 @@
         </div>
       </section>
 
+      <section id="commission-panel" class="commission-panel" aria-labelledby="commission-title" hidden>
+        <div class="commission-heading">
+          <div>
+            <p class="eyebrow">Add to this controller</p>
+            <h2 id="commission-title">Add a Matter device</h2>
+          </div>
+          <button id="commission-close" class="text-button" type="button">Close</button>
+        </div>
+        <p>Open a sharing window for a Matter device already on your network, then enter its fresh sharing code. In Google Home, look for <strong>Linked Matter apps &amp; services</strong> in the device settings.</p>
+        <form id="commission-form" novalidate>
+          <label for="commission-code">Sharing code</label>
+          <div class="commission-input-row">
+            <input id="commission-code" name="code" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" inputmode="text" maxlength="1024" placeholder="Manual code or MT: payload" required>
+            <button id="commission-reveal" class="text-button" type="button" aria-pressed="false">Show</button>
+          </div>
+          <p class="field-help">Use an 11- or 21-digit manual code, or paste an MT: QR payload.</p>
+          <div class="commission-actions">
+            <button id="commission-submit" class="primary-button" type="submit">Add device</button>
+            <button id="commission-stop" class="text-button" type="button" hidden>Stop waiting</button>
+          </div>
+        </form>
+        <div id="commission-status" class="commission-status" role="status" aria-live="polite" tabindex="-1" hidden></div>
+      </section>
+
       <section class="inventory" aria-labelledby="inventory-title">
         <div class="section-heading">
           <div>
             <p class="eyebrow">Overview</p>
             <h2 id="inventory-title">All devices</h2>
           </div>
-          <span id="device-count" class="device-count" aria-live="polite">—</span>
+          <div class="section-actions">
+            <button id="add-device" class="primary-button" type="button" aria-controls="commission-panel" aria-expanded="false" disabled>Add device</button>
+            <span id="device-count" class="device-count" aria-live="polite">—</span>
+          </div>
         </div>
         <div id="notice" class="notice" hidden role="status"></div>
         <div id="devices" class="device-grid" aria-live="polite" aria-busy="true">
