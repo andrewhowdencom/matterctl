@@ -11,8 +11,10 @@ Use `./bin/matterctl` for a local development build. From another LAN machine,
 add `--server.url http://192.168.86.33:8081`, replacing the address as needed.
 The CLI always queries matterctl's HTTP API.
 
-The list shows node and endpoint IDs, Matter labels, last reported availability,
-advertised power capabilities, and known power state. A synchronized empty
+The list shows node and endpoint IDs, Matter labels, advertised device types,
+last reported availability, power capabilities, and known power state. The type
+comes from the endpoint's Descriptor cluster; it does not depend on the label.
+A synchronized empty
 inventory is a successful result; the CLI does not discover uncommissioned
 devices or import Google Home devices automatically.
 
@@ -33,8 +35,8 @@ while `[]` means the server advertised no accepted commands.
 
 Matter labels can differ from Google Home nicknames. Duplicate labels across
 nodes are rejected; use the node ID to disambiguate. An endpoint label selects
-its containing node for inspection. User-defined aliases and endpoint-specific
-control arrive in later phases.
+its containing node for inspection. Use `matterctl device label set <node> <name>` to write a node label.
+For a bridged device with its own label attribute, pass `--endpoint <id>`.
 
 Watch live changes:
 

@@ -3,8 +3,8 @@
 A Go CLI and browser interface for local automation through OHF Matter Server.
 `serve` connects to Matter Server and exposes an HTTP API. The CLI can inspect
 the connection, discover and commission shared devices, inspect their capabilities,
-and watch live events. The browser page displays **unimplemented**. Friendly-name
-aliases and power control follow next.
+set and confirm on/off state, write Matter labels, and watch live events.
+The browser page displays **unimplemented**.
 
 See the [implementation plan](PLAN.md) for the agreed direction, proposed
 commands, and milestones toward controlling the first light.
@@ -40,6 +40,10 @@ from the LAN. Port 8080 is already used by another service on the target host.
 ./bin/matterctl device list
 ./bin/matterctl device discover
 ./bin/matterctl device commission --code-stdin --network-only
+./bin/matterctl device label set 1 "Den Light"
+./bin/matterctl device power on "Den Light"
+./bin/matterctl device power on 1 --endpoint 1
+./bin/matterctl device power off 1 --endpoint 1
 ./bin/matterctl device inspect "Couch lamp"
 ./bin/matterctl event watch --output json
 ```
@@ -100,8 +104,9 @@ The Quadlet's `[Install]` section activates the service at boot; do not run
 The image runs the binary as UID/GID `65532:65532`, with a read-only filesystem
 and no Linux capabilities. It uses host networking to reach
 Matter Server's loopback-only API at `ws://127.0.0.1:5580/ws`. The installed
-service listens on port 8081. The browser placeholder and `/healthz` remain
-available when Matter Server is down; `server info` and `device list` report
+service listens on port 8081. The container filesystem remains read-only.
+The browser placeholder and `/healthz` remain available when Matter Server is
+down; `server info` and `device list` report
 upstream failures and exit nonzero. Event streams report connection changes and
 receive a replacement inventory after reconnect. The local API has no authentication.
 

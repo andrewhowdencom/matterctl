@@ -44,6 +44,8 @@ type Client struct {
 	watchers      map[uint64]watcher
 	watchSerial   uint64
 	commissioning atomic.Bool
+	powering      atomic.Bool
+	labeling      atomic.Bool
 
 	connectTimeout time.Duration
 	syncTimeout    time.Duration
@@ -237,6 +239,10 @@ func (c *Client) call(ctx context.Context, command string, args any, result any)
 }
 
 func (c *Client) callWithTimeout(ctx context.Context, command string, args any, result any, timeout time.Duration) (err error) {
+	return c.callOnSessionWithTimeout(ctx, command, args, result, timeout, nil)
+}
+
+func (c *Client) callOnSessionWithTimeout(ctx context.Context, command string, args any, result any, timeout time.Duration, expected *session) (err error) {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	ctx, span := c.tracer.Start(ctx, "matter."+command, trace.WithSpanKind(trace.SpanKindClient))
@@ -252,10 +258,11 @@ func (c *Client) callWithTimeout(ctx context.Context, command string, args any, 
 	}
 	c.mu.Lock()
 	s := c.current
+	ready := c.ready
 	c.serial++
 	id := strconv.FormatUint(c.serial, 10)
 	c.mu.Unlock()
-	if s == nil {
+	if s == nil || (expected != nil && (s != expected || !ready)) {
 		return api.ErrUnavailable
 	}
 	response := make(chan reply, 1)
@@ -291,7 +298,7 @@ func (c *Client) callWithTimeout(ctx context.Context, command string, args any, 
 	case response := <-response:
 		if response.ErrorCode != nil {
 			// Upstream messages/details can contain arbitrary request data.
-			return remoteError{code: *response.ErrorCode, reason: safeReason(response.Reason)}
+			return remoteError{code: *response.ErrorCode, reason: safeReason(response.Reason), status: response.Status, clusterStatus: response.ClusterStatus}
 		}
 		if err := json.Unmarshal(response.Result, result); err != nil {
 			return errors.New("invalid Matter Server response")
@@ -301,12 +308,14 @@ func (c *Client) callWithTimeout(ctx context.Context, command string, args any, 
 }
 
 type reply struct {
-	MessageID string          `json:"message_id"`
-	Result    json.RawMessage `json:"result"`
-	ErrorCode *int            `json:"error_code"`
-	Reason    string          `json:"reason"`
-	Event     string          `json:"event"`
-	Data      json.RawMessage `json:"data"`
+	MessageID     string          `json:"message_id"`
+	Result        json.RawMessage `json:"result"`
+	ErrorCode     *int            `json:"error_code"`
+	Status        *uint32         `json:"status"`
+	ClusterStatus *uint32         `json:"cluster_status"`
+	Reason        string          `json:"reason"`
+	Event         string          `json:"event"`
+	Data          json.RawMessage `json:"data"`
 }
 
 type session struct {

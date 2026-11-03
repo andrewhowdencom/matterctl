@@ -73,12 +73,27 @@ func project(n node) api.Device {
 		if parent, ok := n.EndpointParents[id]; ok {
 			endpoint.ParentID = &parent
 		}
+		// matter.js uses the numeric struct field IDs on the wire. Accept the
+		// named representation too, as used by other Matter controllers.
 		types, typesKnown := attribute[[]struct {
-			DeviceType uint32 `json:"deviceType"`
-			Revision   uint16 `json:"revision"`
+			DeviceType *uint32 `json:"deviceType"`
+			Revision   *uint16 `json:"revision"`
+			WireType   *uint32 `json:"0"`
+			WireRev    *uint16 `json:"1"`
 		}](n, id, 29, 0)
 		for _, dt := range types {
-			endpoint.DeviceTypes = append(endpoint.DeviceTypes, api.DeviceType{ID: dt.DeviceType, Revision: dt.Revision})
+			deviceType, revision := dt.DeviceType, dt.Revision
+			if deviceType == nil {
+				deviceType = dt.WireType
+			}
+			if revision == nil {
+				revision = dt.WireRev
+			}
+			if deviceType == nil || revision == nil {
+				typesKnown = false
+				continue
+			}
+			endpoint.DeviceTypes = append(endpoint.DeviceTypes, api.DeviceType{ID: *deviceType, Name: deviceTypeName(*deviceType), Revision: *revision})
 		}
 		servers, serversKnown := attribute[[]uint32](n, id, 29, 1)
 		clients, clientsKnown := attribute[[]uint32](n, id, 29, 2)
@@ -122,6 +137,21 @@ func project(n node) api.Device {
 		device.Endpoints = append(device.Endpoints, endpoint)
 	}
 	return device
+}
+
+func deviceTypeName(id uint32) string {
+	switch id {
+	case 0x0100:
+		return "On/Off Light"
+	case 0x0101:
+		return "Dimmable Light"
+	case 0x010C:
+		return "Color Temperature Light"
+	case 0x010D:
+		return "Extended Color Light"
+	default:
+		return ""
+	}
 }
 
 func projectCluster(n node, endpoint uint16, id uint32) api.Cluster {

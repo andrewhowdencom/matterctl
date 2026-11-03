@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/andrewhowdencom/matterctl/internal/api"
 )
@@ -91,5 +92,17 @@ func TestEventWatchProducesNDJSONAndStopsNormallyOnCancellation(t *testing.T) {
 	var event api.Event
 	if json.Unmarshal(output.Bytes(), &event) != nil || event.Type != "inventory" {
 		t.Fatalf("invalid NDJSON: %s", output.String())
+	}
+}
+
+func TestDeviceOutputsShowAdvertisedTypeSeparatelyFromLabel(t *testing.T) {
+	device := api.Device{NodeID: "1", Label: "Den Light", ObservedAt: time.Now(), Endpoints: []api.Endpoint{{ID: 1, DeviceTypes: []api.DeviceType{{ID: 269, Name: "Extended Color Light", Revision: 1}}}}}
+	var output bytes.Buffer
+	if err := printDevice(&output, device); err != nil || !strings.Contains(output.String(), "Extended Color Light (269, revision 1)") {
+		t.Fatalf("inspect omitted device type: %v %s", err, &output)
+	}
+	output.Reset()
+	if err := printInventory(&output, api.Inventory{Connection: api.Connection{State: "connected"}, Ready: true, Devices: []api.Device{device}}); err != nil || !strings.Contains(output.String(), "Extended Color Light") || !strings.Contains(output.String(), "DEVICE TYPE") {
+		t.Fatalf("list omitted device type: %v %s", err, &output)
 	}
 }

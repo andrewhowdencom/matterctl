@@ -24,6 +24,8 @@ type options struct {
 	matter        api.InfoSource
 	devices       api.DeviceSource
 	commissioning api.CommissioningSource
+	power         api.PowerSource
+	labels        api.LabelSource
 	heartbeat     time.Duration
 	tracer        trace.Tracer
 }
@@ -34,6 +36,14 @@ func WithDevices(source api.DeviceSource) Option {
 
 func WithCommissioning(source api.CommissioningSource) Option {
 	return func(o *options) { o.commissioning = source }
+}
+
+func WithPower(source api.PowerSource) Option {
+	return func(o *options) { o.power = source }
+}
+
+func WithLabels(source api.LabelSource) Option {
+	return func(o *options) { o.labels = source }
 }
 
 type Option func(*options)
@@ -110,6 +120,8 @@ func handler(logger *slog.Logger, opts ...Option) http.Handler {
 	})
 	addDeviceRoutes(mux, options, logger)
 	addCommissioningRoutes(mux, options, logger)
+	addPowerRoutes(mux, options, logger)
+	addLabelRoutes(mux, options, logger)
 	return mux
 }
 

@@ -33,9 +33,25 @@ Google Home does not establish Matter support.
 6. Verify the light remains usable in Google Home. Sharing adds Matter Server
    as another controller; this workflow does not request removal from Google Home.
 
-Matter labels may differ from Google Home's names. Persistent matterctl aliases
-and power commands are subsequent phases; this phase does not turn the light on
-or off through matterctl yet.
+Matter labels may differ from Google Home's names. Write the node's Matter
+label, then use that name for control:
+
+```sh
+./bin/matterctl device label set <node-id> "Den Light"
+./bin/matterctl device power on "Den Light"
+./bin/matterctl device power off "Den Light"
+```
+
+Numeric node and endpoint IDs also work:
+
+```sh
+./bin/matterctl device power on <node-id> --endpoint <endpoint-id>
+./bin/matterctl device power off <node-id> --endpoint <endpoint-id>
+```
+
+The command returns success only after a fresh post-command read confirms the
+reported state. A timeout or connection loss can leave the physical outcome
+unknown; inspect the device before deciding whether to send another command.
 
 If the attempt fails, use the guidance accompanying the upstream error. A
 missing device generally calls for a fresh sharing window and a reachability

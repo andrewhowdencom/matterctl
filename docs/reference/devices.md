@@ -10,13 +10,16 @@ matterctl event watch [--device <target>] [--output text|json]
 
 Commands use the existing `server.url`, `request.timeout`, and `output`
 [settings](server-info.md). Node IDs are decimal and retain their full 64-bit
-value. Labels are exact, case-sensitive Matter node or bridged endpoint labels.
-Numeric targets select node IDs. A label matching several nodes is ambiguous.
+value. Matter labels are exact and case-sensitive.
+Numeric targets select node IDs. A name matching several node or endpoint targets
+is ambiguous; the error lists candidates.
 Inspecting an endpoint label returns its containing node and all endpoints.
 These commands do not change devices or commission new ones.
 
 `device list` reads the synchronized service cache. It reports connection state,
-readiness, and the last inventory update time. Inspection includes availability,
+readiness, the last inventory update time, and each endpoint's advertised device
+type. The type comes from Matter's Descriptor cluster and is independent of the
+user-set label. Inspection includes availability,
 the last node update time, labels, vendor/product names, and endpoint metadata.
 Times indicate when matterctl applied updates; they are not fresh reads of every
 attribute. Availability is the upstream's last reported device availability.
@@ -38,14 +41,14 @@ HTTP 503 returns `ready: false`, a diagnostic `error`, and the previous snapshot
 when available. The initial snapshot deadline is ten seconds; failures trigger
 reconnection and a new subscription.
 
-Each device has a string `node_id`, optional `label`, `vendor`, and `product`,
+Each device has a string `node_id`, optional Matter `label`, `vendor` and `product`,
 plus `available`, `is_bridge`, `observed_at`, and `endpoints`. An endpoint has:
 
 | Field | Meaning |
 | --- | --- |
 | `id` / optional `parent_id` | Numeric endpoint ID and directly reported parent |
 | `label` | Optional bridged-device label |
-| `device_types` | Advertised type IDs and revisions |
+| `device_types` | Advertised type IDs, revisions, and known standard names |
 | `server_clusters` / `client_clusters` | Capability roles, kept separate |
 | `descriptor_complete` | Whether type, server-list, and client-list metadata were present |
 | `capabilities` | Friendly power actions supported by advertised server-side commands |
@@ -83,7 +86,7 @@ All inventory responses use JSON and `Cache-Control: no-store`.
 
 ### GET /api/v1/events?device=TARGET
 
-The optional `device` query selects a node once, by ID or label. All endpoints
+The optional `device` query selects a node once, by ID or Matter label. All endpoints
 of that node are included. Connection changes are always included. Node removal
 or a later label change does not redirect an existing subscription to another
 node. A filtered stream requires ready inventory; the unfiltered stream can

@@ -26,7 +26,7 @@ func configuredClient(config *viper.Viper) (*client.Client, string, error) {
 
 func deviceCommand(config *viper.Viper) *cobra.Command {
 	command := &cobra.Command{Use: "device", Short: "Discover, commission, and inspect Matter devices"}
-	command.AddCommand(discoverCommand(config), commissionCommand(config))
+	command.AddCommand(discoverCommand(config), commissionCommand(config), powerCommand(config), labelCommand(config))
 	command.AddCommand(&cobra.Command{
 		Use: "list", Short: "List devices and their endpoint capabilities", Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -88,12 +88,12 @@ func printInventory(output io.Writer, inventory api.Inventory) error {
 		return err
 	}
 	w := tabwriter.NewWriter(output, 0, 4, 2, ' ', 0)
-	if _, err := fmt.Fprintln(w, "NODE\tLABEL\tAVAILABLE\tENDPOINT\tENDPOINT LABEL\tCAPABILITIES\tPOWER"); err != nil {
+	if _, err := fmt.Fprintln(w, "NODE\tLABEL\tAVAILABLE\tENDPOINT\tENDPOINT LABEL\tDEVICE TYPE\tCAPABILITIES\tPOWER"); err != nil {
 		return err
 	}
 	for _, device := range inventory.Devices {
 		if len(device.Endpoints) == 0 {
-			if _, err := fmt.Fprintf(w, "%s\t%q\t%t\t?\t\tunknown\t\n", device.NodeID, device.Label, device.Available); err != nil {
+			if _, err := fmt.Fprintf(w, "%s\t%q\t%t\t?\t\tunknown\tunknown\t\n", device.NodeID, device.Label, device.Available); err != nil {
 				return err
 			}
 		}
@@ -110,7 +110,7 @@ func printInventory(output io.Writer, inventory api.Inventory) error {
 					power = "off"
 				}
 			}
-			if _, err := fmt.Fprintf(w, "%s\t%q\t%t\t%d\t%q\t%s\t%s\n", device.NodeID, device.Label, device.Available, endpoint.ID, endpoint.Label, capabilities, power); err != nil {
+			if _, err := fmt.Fprintf(w, "%s\t%q\t%t\t%d\t%q\t%s\t%s\t%s\n", device.NodeID, device.Label, device.Available, endpoint.ID, endpoint.Label, deviceTypeSummary(endpoint.DeviceTypes), capabilities, power); err != nil {
 				return err
 			}
 		}
@@ -131,7 +131,7 @@ func printDevice(output io.Writer, device api.Device) error {
 				return err
 			}
 		}
-		if _, err := fmt.Fprintf(output, "  Device types: %v\n  Capabilities: %s\n", endpoint.DeviceTypes, strings.Join(endpoint.Capabilities, ", ")); err != nil {
+		if _, err := fmt.Fprintf(output, "  Device types: %s\n  Capabilities: %s\n", deviceTypeDetails(endpoint.DeviceTypes), strings.Join(endpoint.Capabilities, ", ")); err != nil {
 			return err
 		}
 		if endpoint.Power != nil {
@@ -179,4 +179,34 @@ func printDevice(output io.Writer, device api.Device) error {
 		}
 	}
 	return nil
+}
+
+func deviceTypeSummary(types []api.DeviceType) string {
+	if len(types) == 0 {
+		return "unknown"
+	}
+	names := make([]string, 0, len(types))
+	for _, deviceType := range types {
+		if deviceType.Name != "" {
+			names = append(names, deviceType.Name)
+		} else {
+			names = append(names, fmt.Sprint(deviceType.ID))
+		}
+	}
+	return strings.Join(names, ", ")
+}
+
+func deviceTypeDetails(types []api.DeviceType) string {
+	if len(types) == 0 {
+		return "unknown"
+	}
+	parts := make([]string, 0, len(types))
+	for _, deviceType := range types {
+		if deviceType.Name != "" {
+			parts = append(parts, fmt.Sprintf("%s (%d, revision %d)", deviceType.Name, deviceType.ID, deviceType.Revision))
+		} else {
+			parts = append(parts, fmt.Sprintf("%d (revision %d)", deviceType.ID, deviceType.Revision))
+		}
+	}
+	return strings.Join(parts, ", ")
 }
