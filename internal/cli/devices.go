@@ -134,19 +134,28 @@ func printDevice(output io.Writer, device api.Device) error {
 		if _, err := fmt.Fprintf(output, "  Device types: %s\n  Capabilities: %s\n", deviceTypeDetails(endpoint.DeviceTypes), strings.Join(endpoint.Capabilities, ", ")); err != nil {
 			return err
 		}
-		if endpoint.Power != nil {
-			if _, err := fmt.Fprintf(output, "  Power: %t\n", *endpoint.Power); err != nil {
-				return err
+		if len(endpoint.States) != 0 {
+			for _, state := range endpoint.States {
+				if _, err := fmt.Fprintf(output, "  %s: %s\n", state.Name, state.Text); err != nil {
+					return err
+				}
 			}
-		}
-		if endpoint.Level != nil {
-			if _, err := fmt.Fprintf(output, "  Level: %d\n", *endpoint.Level); err != nil {
-				return err
+		} else {
+			// Older servers do not provide the generic state projection.
+			if endpoint.Power != nil {
+				if _, err := fmt.Fprintf(output, "  Power: %t\n", *endpoint.Power); err != nil {
+					return err
+				}
 			}
-		}
-		if endpoint.SwitchPosition != nil {
-			if _, err := fmt.Fprintf(output, "  Switch position: %d\n", *endpoint.SwitchPosition); err != nil {
-				return err
+			if endpoint.Level != nil {
+				if _, err := fmt.Fprintf(output, "  Level: %d\n", *endpoint.Level); err != nil {
+					return err
+				}
+			}
+			if endpoint.SwitchPosition != nil {
+				if _, err := fmt.Fprintf(output, "  Switch position: %d\n", *endpoint.SwitchPosition); err != nil {
+					return err
+				}
 			}
 		}
 		for _, role := range []struct {

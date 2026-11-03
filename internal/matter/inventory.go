@@ -257,7 +257,8 @@ func (c *Client) applyEventLocked(frame reply, publish bool) error {
 		if json.Unmarshal(frame.Data, &update) != nil || len(update) != 3 || json.Unmarshal(update[0], &id) != nil || json.Unmarshal(update[1], &path) != nil {
 			return errors.New("invalid attribute update")
 		}
-		if _, _, _, ok := parsePath(path); !ok {
+		endpointID, clusterID, attributeID, ok := parsePath(path)
+		if !ok {
 			return errors.New("invalid attribute path")
 		}
 		n, found := c.nodes[id]
@@ -274,10 +275,22 @@ func (c *Client) applyEventLocked(frame reply, publish bool) error {
 		}
 		n.observedAt = now
 		c.nodes[id] = n
+		device := project(n)
+		var state *api.State
+		for _, endpoint := range device.Endpoints {
+			if endpoint.ID != endpointID || !slices.ContainsFunc(endpoint.ServerClusters, func(cluster api.Cluster) bool { return cluster.ID == clusterID }) {
+				continue
+			}
+			if decoded, known := decodeState(clusterID, attributeID, update[2]); known {
+				state = &decoded
+			}
+			break
+		}
 		data = struct {
 			Path   string     `json:"path"`
 			Device api.Device `json:"device"`
-		}{path, project(n)}
+			State  *api.State `json:"state,omitempty"`
+		}{path, device, state}
 	case "endpoint_added", "endpoint_removed":
 		var update struct {
 			NodeID     api.NodeID `json:"node_id"`
@@ -327,8 +340,19 @@ func (c *Client) applyEventLocked(frame reply, publish bool) error {
 			return errors.New("invalid device event")
 		}
 		id = event.NodeID
+		var deviceTypes []api.DeviceType
+		if n, found := c.nodes[id]; found {
+			for _, endpoint := range project(n).Endpoints {
+				if endpoint.ID == event.EndpointID {
+					deviceTypes = endpoint.DeviceTypes
+					break
+				}
+			}
+		}
 		fields := map[string]uint8{}
-		if event.ClusterID == 59 {
+		eventName := ""
+		if event.ClusterID == clusterSwitch {
+			eventName = switchEventName(event.EventID)
 			var values map[string]json.RawMessage
 			if err := json.Unmarshal(event.Data, &values); err != nil {
 				values = nil
@@ -344,12 +368,14 @@ func (c *Client) applyEventLocked(frame reply, publish bool) error {
 			EndpointID    uint16           `json:"endpoint_id"`
 			ClusterID     uint32           `json:"cluster_id"`
 			EventID       uint32           `json:"event_id"`
+			EventName     string           `json:"event_name,omitempty"`
 			EventNumber   string           `json:"event_number,omitempty"`
 			Timestamp     string           `json:"timestamp,omitempty"`
 			TimestampType uint8            `json:"timestamp_type"`
 			Priority      uint8            `json:"priority"`
+			DeviceTypes   []api.DeviceType `json:"device_types,omitempty"`
 			Data          map[string]uint8 `json:"data"`
-		}{event.EndpointID, event.ClusterID, event.EventID, event.EventNumber.String(), event.Timestamp.String(), event.TimestampType, event.Priority, fields}
+		}{event.EndpointID, event.ClusterID, event.EventID, eventName, event.EventNumber.String(), event.Timestamp.String(), event.TimestampType, event.Priority, deviceTypes, fields}
 	default:
 		return nil
 	}
@@ -360,4 +386,25 @@ func (c *Client) applyEventLocked(frame reply, publish bool) error {
 		c.publishLocked(newEvent(frame.Event, id, data))
 	}
 	return nil
+}
+
+func switchEventName(id uint32) string {
+	switch id {
+	case switchEventLatched:
+		return "switch_latched"
+	case switchEventInitialPress:
+		return "initial_press"
+	case switchEventLongPress:
+		return "long_press"
+	case switchEventShortRelease:
+		return "short_release"
+	case switchEventLongRelease:
+		return "long_release"
+	case switchEventMultiPressOngoing:
+		return "multi_press_ongoing"
+	case switchEventMultiPressComplete:
+		return "multi_press_complete"
+	default:
+		return ""
+	}
 }

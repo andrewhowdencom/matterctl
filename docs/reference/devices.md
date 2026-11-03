@@ -53,6 +53,7 @@ plus `available`, `is_bridge`, `observed_at`, and `endpoints`. An endpoint has:
 | `descriptor_complete` | Whether type, server-list, and client-list metadata were present |
 | `capabilities` | Friendly power actions supported by advertised server-side commands |
 | `power`, `level`, `switch_position` | Selected cached state, omitted when unknown |
+| `states` | Allowlisted, normalized state values with cluster/attribute IDs, name, JSON scalar value, display text, and optional unit |
 
 Clusters expose their ID, a known name when available, accepted commands,
 attribute/event IDs, and a validated feature map when present. Unknown names
@@ -61,8 +62,12 @@ remain numeric IDs. `accepted_commands: null` means metadata is unavailable;
 commands `off`, `on`, and `toggle`; other commands retain their IDs.
 
 The API projects selected fields rather than returning raw node dumps.
-Unselected attribute values, including commissioning/security data, are not
-exposed. Attribute IDs can still be inspected.
+`states` currently covers OnOff, LevelControl, Switch, OccupancySensing, and
+TemperatureMeasurement values. Occupancy is a Boolean in JSON and
+`occupied`/`unoccupied` in text. Temperature is converted from hundredths of a
+degree Celsius to degrees Celsius. Null or invalid values do not appear in
+inventory states. Unselected attribute values, including commissioning/security
+data, are not exposed. Attribute IDs can still be inspected.
 
 ### GET /api/v1/devices/inspect?target=TARGET
 
@@ -101,9 +106,9 @@ service-side `observed_at`, optional string `node_id`, and `data`:
 | `connection` | Upstream connection state and inventory readiness |
 | `node_added`, `node_updated` | Projected device object |
 | `node_removed` | String node ID |
-| `attribute_updated` | Attribute path and updated projected device |
+| `attribute_updated` | Attribute path, updated projected device, and optional decoded `state` |
 | `endpoint_added`, `endpoint_removed` | Endpoint ID and updated projected device |
-| `node_event` | Endpoint/cluster/event IDs, counter/timestamp strings, timestamp type, priority, and selected event fields |
+| `node_event` | Endpoint/cluster/event IDs, standard Switch event name when known, counter/timestamp strings, timestamp type, priority, and selected event fields |
 | `heartbeat` | Empty object, every 15 seconds |
 | `stream_error` | Stream interrupted; restart to obtain a new snapshot |
 
@@ -125,6 +130,34 @@ seconds is canceled by the CLI. Frames and inventory HTTP responses are limited
 to 16 MiB by the client. A failed stream is not automatically reconnected;
 restart watch to receive a new initial snapshot. Existing streams remain open
 across upstream reconnects and receive a replacement inventory.
+
+The CLI's text output uses one compact line per event and omits the projected
+device objects. For `attribute_updated`, it shows the numeric attribute path,
+endpoint type, and decoded state when available. A cleared known value appears
+as `unknown`. Unknown attributes retain their numeric path without exposing the
+raw value. For `node_event`, it shows endpoint, cluster, event ID, known Switch
+event name, event number, and supported Switch fields. JSON output retains the
+full projected event object.
+
+Matter defines the IDs for device types, clusters, attributes, and cluster
+feature maps. The device advertises which types and server/client clusters it
+has; `device inspect` reports those IDs and known names. The adapter's
+[`ids.go`](../../internal/matter/ids.go) names the subset currently interpreted,
+and state decoders are keyed by cluster and attribute rather than device model.
+The source catalog is the [Matter data model](https://github.com/project-chip/connectedhomeip/tree/master/data_model).
+
+A Dimmable Light with a LevelControl server reports its current level through
+the `level` state decoder. A Dimmer Switch advertises a different device type
+and commonly uses a LevelControl client to send commands. Its type is named in
+inventory and watch output, but a client command is not itself a level state
+change on the switch. If the switch also advertises a Switch server cluster,
+the stream can show its standard Switch events. Watching the controlled light
+shows level changes that the light reports.
+
+Product names need not match Matter device types. For example, a rotary dimmer
+may advertise several Generic Switch endpoints rather than a Dimmer Switch
+endpoint. Use `device inspect` to see the actual type and cluster roles before
+interpreting its watch events.
 
 Upstream wire formats are documented in the
 [Matter Server v1.5.5 API](https://github.com/matter-js/matterjs-server/blob/v1.5.5/docs/websockets_api.md).

@@ -48,8 +48,8 @@ func parsePath(path string) (uint16, uint32, uint32, bool) {
 
 func project(n node) api.Device {
 	device := api.Device{
-		NodeID: n.NodeID, Label: textAttribute(n, 0, 40, 5),
-		Vendor: textAttribute(n, 0, 40, 1), Product: textAttribute(n, 0, 40, 3),
+		NodeID: n.NodeID, Label: textAttribute(n, 0, clusterBasicInformation, attributeNodeLabel),
+		Vendor: textAttribute(n, 0, clusterBasicInformation, attributeVendorName), Product: textAttribute(n, 0, clusterBasicInformation, attributeProductName),
 		Available: n.Available, IsBridge: n.IsBridge, ObservedAt: n.observedAt,
 		Endpoints: []api.Endpoint{},
 	}
@@ -67,7 +67,7 @@ func project(n node) api.Device {
 	}
 	for _, id := range sortedKeys(endpoints) {
 		endpoint := api.Endpoint{
-			ID: id, Label: textAttribute(n, id, 57, 5),
+			ID: id, Label: textAttribute(n, id, clusterBridgedDeviceInformation, attributeBridgedNodeLabel),
 			DeviceTypes: []api.DeviceType{}, ServerClusters: []api.Cluster{}, ClientClusters: []api.Cluster{}, Capabilities: []string{},
 		}
 		if parent, ok := n.EndpointParents[id]; ok {
@@ -80,7 +80,7 @@ func project(n node) api.Device {
 			Revision   *uint16 `json:"revision"`
 			WireType   *uint32 `json:"0"`
 			WireRev    *uint16 `json:"1"`
-		}](n, id, 29, 0)
+		}](n, id, clusterDescriptor, attributeDeviceTypeList)
 		for _, dt := range types {
 			deviceType, revision := dt.DeviceType, dt.Revision
 			if deviceType == nil {
@@ -95,8 +95,8 @@ func project(n node) api.Device {
 			}
 			endpoint.DeviceTypes = append(endpoint.DeviceTypes, api.DeviceType{ID: *deviceType, Name: deviceTypeName(*deviceType), Revision: *revision})
 		}
-		servers, serversKnown := attribute[[]uint32](n, id, 29, 1)
-		clients, clientsKnown := attribute[[]uint32](n, id, 29, 2)
+		servers, serversKnown := attribute[[]uint32](n, id, clusterDescriptor, attributeServerList)
+		clients, clientsKnown := attribute[[]uint32](n, id, clusterDescriptor, attributeClientList)
 		endpoint.DescriptorComplete = typesKnown && serversKnown && clientsKnown
 		if !serversKnown {
 			observed := map[uint32]bool{}
@@ -110,23 +110,23 @@ func project(n node) api.Device {
 		for _, clusterID := range uniqueSorted(servers) {
 			cluster := projectCluster(n, id, clusterID)
 			endpoint.ServerClusters = append(endpoint.ServerClusters, cluster)
-			if clusterID == 6 {
+			if clusterID == clusterOnOff {
 				for _, command := range cluster.AcceptedCommands {
 					if name := powerName(command.ID); name != "" {
 						endpoint.Capabilities = append(endpoint.Capabilities, "power."+name)
 					}
 				}
-				if power, ok := attribute[bool](n, id, 6, 0); ok {
+				if power, ok := attribute[bool](n, id, clusterOnOff, attributeOnOff); ok {
 					endpoint.Power = &power
 				}
 			}
-			if clusterID == 8 {
-				if level, ok := attribute[uint8](n, id, 8, 0); ok {
+			if clusterID == clusterLevelControl {
+				if level, ok := attribute[uint8](n, id, clusterLevelControl, attributeCurrentLevel); ok {
 					endpoint.Level = &level
 				}
 			}
-			if clusterID == 59 {
-				if position, ok := attribute[uint8](n, id, 59, 1); ok {
+			if clusterID == clusterSwitch {
+				if position, ok := attribute[uint8](n, id, clusterSwitch, attributeSwitchCurrentPosition); ok {
 					endpoint.SwitchPosition = &position
 				}
 			}
@@ -134,6 +134,24 @@ func project(n node) api.Device {
 		for _, clusterID := range uniqueSorted(clients) {
 			endpoint.ClientClusters = append(endpoint.ClientClusters, api.Cluster{ID: clusterID, Name: clusterName(clusterID)})
 		}
+		for path, raw := range n.Attributes {
+			ep, clusterID, attributeID, ok := parsePath(path)
+			if !ok || ep != id || string(raw) == "null" {
+				continue
+			}
+			if !slices.ContainsFunc(endpoint.ServerClusters, func(cluster api.Cluster) bool { return cluster.ID == clusterID }) {
+				continue
+			}
+			if state, known := decodeState(clusterID, attributeID, raw); known {
+				endpoint.States = append(endpoint.States, state)
+			}
+		}
+		slices.SortFunc(endpoint.States, func(a, b api.State) int {
+			if a.ClusterID != b.ClusterID {
+				return int(a.ClusterID) - int(b.ClusterID)
+			}
+			return int(a.AttributeID) - int(b.AttributeID)
+		})
 		device.Endpoints = append(device.Endpoints, endpoint)
 	}
 	return device
@@ -141,14 +159,26 @@ func project(n node) api.Device {
 
 func deviceTypeName(id uint32) string {
 	switch id {
-	case 0x0100:
+	case deviceTypeGenericSwitch:
+		return "Generic Switch"
+	case deviceTypeOnOffLight:
 		return "On/Off Light"
-	case 0x0101:
+	case deviceTypeDimmableLight:
 		return "Dimmable Light"
-	case 0x010C:
+	case deviceTypeOnOffLightSwitch:
+		return "On/Off Light Switch"
+	case deviceTypeDimmerSwitch:
+		return "Dimmer Switch"
+	case deviceTypeColorDimmerSwitch:
+		return "Color Dimmer Switch"
+	case deviceTypeColorTempLight:
 		return "Color Temperature Light"
-	case 0x010D:
+	case deviceTypeExtendedColorLight:
 		return "Extended Color Light"
+	case deviceTypeOccupancySensor:
+		return "Occupancy Sensor"
+	case deviceTypeTemperatureSensor:
+		return "Temperature Sensor"
 	default:
 		return ""
 	}
@@ -156,27 +186,27 @@ func deviceTypeName(id uint32) string {
 
 func projectCluster(n node, endpoint uint16, id uint32) api.Cluster {
 	cluster := api.Cluster{ID: id, Name: clusterName(id), Attributes: []uint32{}, Events: []uint32{}}
-	if commands, known := attribute[[]uint32](n, endpoint, id, 65529); known {
+	if commands, known := attribute[[]uint32](n, endpoint, id, attributeAcceptedCommands); known {
 		cluster.AcceptedCommands = []api.Command{}
 		for _, command := range uniqueSorted(commands) {
 			name := ""
-			if id == 6 {
+			if id == clusterOnOff {
 				name = powerName(command)
 			}
 			cluster.AcceptedCommands = append(cluster.AcceptedCommands, api.Command{ID: command, Name: name})
 		}
 	}
-	attrs, _ := attribute[[]uint32](n, endpoint, id, 65531)
+	attrs, _ := attribute[[]uint32](n, endpoint, id, attributeAttributeList)
 	for path := range n.Attributes {
 		if ep, cl, attr, ok := parsePath(path); ok && ep == endpoint && cl == id {
 			attrs = append(attrs, attr)
 		}
 	}
 	cluster.Attributes = uniqueSorted(attrs)
-	events, _ := attribute[[]uint32](n, endpoint, id, 65530)
+	events, _ := attribute[[]uint32](n, endpoint, id, attributeEventList)
 	cluster.Events = uniqueSorted(events)
 	// FeatureMap is either a bitmask or matter.js's decoded boolean object.
-	if raw, ok := attribute[json.RawMessage](n, endpoint, id, 65532); ok {
+	if raw, ok := attribute[json.RawMessage](n, endpoint, id, attributeFeatureMap); ok {
 		var bits uint32
 		var features map[string]bool
 		if json.Unmarshal(raw, &bits) == nil || json.Unmarshal(raw, &features) == nil {
@@ -207,8 +237,9 @@ func powerName(id uint32) string {
 
 func clusterName(id uint32) string {
 	return map[uint32]string{
-		3: "Identify", 4: "Groups", 6: "OnOff", 8: "LevelControl", 29: "Descriptor",
-		40: "BasicInformation", 57: "BridgedDeviceBasicInformation", 59: "Switch",
-		257: "DoorLock", 258: "WindowCovering", 513: "Thermostat", 768: "ColorControl",
+		clusterIdentify: "Identify", clusterGroups: "Groups", clusterOnOff: "OnOff", clusterLevelControl: "LevelControl", clusterDescriptor: "Descriptor",
+		clusterBasicInformation: "BasicInformation", clusterBridgedDeviceInformation: "BridgedDeviceBasicInformation", clusterSwitch: "Switch",
+		clusterDoorLock: "DoorLock", clusterWindowCovering: "WindowCovering", clusterThermostat: "Thermostat", clusterColorControl: "ColorControl",
+		clusterTemperatureMeasurement: "TemperatureMeasurement", clusterOccupancySensing: "OccupancySensing",
 	}[id]
 }
