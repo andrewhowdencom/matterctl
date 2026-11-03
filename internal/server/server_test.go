@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -34,7 +35,7 @@ func TestServeAndShutdown(t *testing.T) {
 	if readErr != nil || closeErr != nil {
 		t.Fatalf("read response: %v; close response: %v", readErr, closeErr)
 	}
-	if response.StatusCode != http.StatusOK || !strings.Contains(string(body), "<h1>unimplemented</h1>") {
+	if response.StatusCode != http.StatusOK || !strings.Contains(string(body), "<h1 id=\"page-title\">Your devices") {
 		t.Fatalf("unexpected response: status=%d body=%s", response.StatusCode, body)
 	}
 	if got := response.Header.Get("Content-Type"); got != "text/html; charset=utf-8" {
@@ -56,6 +57,29 @@ func TestServeAndShutdown(t *testing.T) {
 			t.Error(closeErr)
 		}
 		t.Fatal("listener still accepts connections after shutdown")
+	}
+}
+
+func TestWebAssets(t *testing.T) {
+	h := handler(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	for _, tt := range []struct {
+		path, contentType, contains string
+	}{
+		{"/", "text/html; charset=utf-8", `<script type="module" src="/app.mjs">`},
+		{"/app.css", "text/css; charset=utf-8", ".device-card"},
+		{"/app.mjs", "text/javascript; charset=utf-8", "/api/v1/events"},
+	} {
+		response := httptest.NewRecorder()
+		h.ServeHTTP(response, httptest.NewRequest(http.MethodGet, tt.path, nil))
+		if response.Code != http.StatusOK || response.Header().Get("Content-Type") != tt.contentType ||
+			response.Header().Get("Cache-Control") != "no-store" || !strings.Contains(response.Body.String(), tt.contains) {
+			t.Errorf("GET %s: status=%d headers=%v body=%s", tt.path, response.Code, response.Header(), response.Body)
+		}
+	}
+	response := httptest.NewRecorder()
+	h.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/missing-page", nil))
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("unknown path returned %d", response.Code)
 	}
 }
 

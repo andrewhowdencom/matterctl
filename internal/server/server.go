@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -71,15 +70,10 @@ func handler(logger *slog.Logger, opts ...Option) http.Handler {
 		option(&options)
 	}
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		if _, err := io.WriteString(w, page); err != nil {
-			logger.Debug("write page", "error", err)
-		}
-	})
+	addWebRoutes(mux, logger)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		if _, err := io.WriteString(w, `{"status":"ok"}`+"\n"); err != nil {
+		if _, err := w.Write([]byte(`{"status":"ok"}` + "\n")); err != nil {
 			logger.Debug("write health response", "error", err)
 		}
 	})
@@ -156,23 +150,3 @@ func serve(ctx context.Context, listener net.Listener, logger *slog.Logger, opts
 		return nil
 	}
 }
-
-const page = `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>matterctl</title>
-  <style>
-    body { margin: 0; min-height: 100vh; display: grid; place-items: center;
-           font-family: system-ui, sans-serif; background: #f5f4ef; color: #25251f; }
-    main { text-align: center; }
-    p { color: #66665c; }
-    h1 { font-size: 2rem; font-weight: 500; }
-  </style>
-</head>
-<body>
-  <main><p>matterctl</p><h1>unimplemented</h1></main>
-</body>
-</html>
-`

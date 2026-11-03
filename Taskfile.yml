@@ -26,6 +26,11 @@ tasks:
     cmds:
       - go test -race ./...
 
+  web:test:
+    desc: Test the browser inventory state and event stream
+    cmds:
+      - node --test internal/server/web/app.test.mjs
+
   lint:
     desc: Check Go formatting and run golangci-lint
     preconditions:
@@ -37,10 +42,11 @@ tasks:
       - golangci-lint run
 
   validate:
-    desc: Run formatting, lint, race tests, and the build
+    desc: Run formatting, lint, Go and browser tests, and the build
     cmds:
       - task: lint
       - task: test
+      - task: web:test
       - task: build
 
   run:

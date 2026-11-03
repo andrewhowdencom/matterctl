@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f4ee">
+  <title>Devices · matterctl</title>
+  <link rel="stylesheet" href="/app.css">
+  <script type="module" src="/app.mjs"></script>
+</head>
+<body>
+  <div class="page-shell">
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="matterctl home">
+        <span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span><span></span></span>
+        <span>matterctl</span>
+      </a>
+      <span class="header-label">Home network</span>
+    </header>
+
+    <main>
+      <section class="intro" aria-labelledby="page-title">
+        <div>
+          <p class="eyebrow">Matter devices</p>
+          <h1 id="page-title">Your devices<span class="title-dot">.</span></h1>
+          <p class="intro-copy">A live view of the devices connected to this controller.</p>
+        </div>
+        <div id="connection" class="connection connection-loading" role="status" aria-live="polite">
+          <span class="connection-indicator" aria-hidden="true"></span>
+          <span>Connecting…</span>
+        </div>
+      </section>
+
+      <section class="inventory" aria-labelledby="inventory-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Overview</p>
+            <h2 id="inventory-title">All devices</h2>
+          </div>
+          <span id="device-count" class="device-count" aria-live="polite">—</span>
+        </div>
+        <div id="notice" class="notice" hidden role="status"></div>
+        <div id="devices" class="device-grid" aria-live="polite" aria-busy="true">
+          <div class="empty-state loading-state">
+            <span class="loading-pulse" aria-hidden="true"></span>
+            <p>Loading devices…</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <span>matterctl</span>
+      <span>Reported Matter state · Local network</span>
+    </footer>
+  </div>
+</body>
+</html>
