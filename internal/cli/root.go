@@ -74,7 +74,7 @@ func NewCommand() (*cobra.Command, error) {
 	if err := config.BindPFlag("matter.url", serve.Flags().Lookup("matter.url")); err != nil {
 		return nil, fmt.Errorf("bind Matter Server URL: %w", err)
 	}
-	root.AddCommand(serverCommand(config), deviceCommand(config), eventCommand(config))
+	root.AddCommand(serverCommand(config), deviceCommand(config), eventCommand(config), automationCommand(config))
 	root.AddCommand(serve, &cobra.Command{
 		Use:   "version",
 		Short: "Print the build version",

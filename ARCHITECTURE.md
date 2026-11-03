@@ -23,6 +23,7 @@ flowchart LR
 | `internal/api` | Shared types and small source interfaces |
 | `internal/server` | HTTP API and embedded browser assets |
 | `internal/matter` | WebSocket session, inventory, capability projection, subscriptions, and commissioning |
+| `internal/automation` | Starlark rule registration, normalized triggers, and action-plan previews |
 | `internal/app` | Adapter construction and coordinated lifetimes |
 
 Cobra and Viper remain at the CLI boundary. The HTTP server depends on the
@@ -33,6 +34,13 @@ The Matter adapter resolves exact node and bridged endpoint labels for
 inspection, event filtering, and control. It writes supported Matter NodeLabel
 attributes and confirms them with a fresh read. Numeric node and endpoint IDs
 remain available for disambiguation. Matter Server owns label persistence.
+
+The automation prototype runs in the CLI process. It consumes projected
+inventory and event frames through the existing HTTP client, normalizes
+occupancy and Switch signals, and evaluates bounded Starlark handlers into
+action plans. The engine has no Matter adapter or command executor dependency;
+it never sends actions. Target resolution uses exact labels or node IDs and
+does not retarget an existing reference after a connection snapshot changes.
 
 The browser assets are embedded in the Go binary. The page reads the inventory
 endpoint and the unfiltered NDJSON event stream from the same origin. Stream

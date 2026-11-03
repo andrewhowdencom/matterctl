@@ -12,6 +12,8 @@ commands, and milestones toward controlling the first light.
 See [browser requirements](WEB_REQUIREMENTS.md) for the first device-list screen.
 See [user documentation](docs/index.md) for connection checks and the API
 reference, and [architecture](ARCHITECTURE.md) for application boundaries.
+See [automation previews](docs/how-to/preview-automations.md) for the
+Starlark rule example and dry-run CLI.
 
 ## Development
 
@@ -49,6 +51,8 @@ from the LAN. Port 8080 is already used by another service on the target host.
 ./bin/matterctl device power off 1 --endpoint 1
 ./bin/matterctl device inspect "Couch lamp"
 ./bin/matterctl event watch --output json
+./bin/matterctl automation check examples/den.star
+./bin/matterctl automation watch examples/den.star
 ```
 
 ## Configuration
