@@ -44,7 +44,7 @@ type Client struct {
 	watchers      map[uint64]watcher
 	watchSerial   uint64
 	commissioning atomic.Bool
-	powering      atomic.Bool
+	controlling   atomic.Bool
 	labeling      atomic.Bool
 
 	connectTimeout time.Duration

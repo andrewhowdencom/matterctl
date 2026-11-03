@@ -12,8 +12,8 @@ commands, and milestones toward controlling the first light.
 See [browser requirements](WEB_REQUIREMENTS.md) for the first device-list screen.
 See [user documentation](docs/index.md) for connection checks and the API
 reference, and [architecture](ARCHITECTURE.md) for application boundaries.
-See [automation previews](docs/how-to/preview-automations.md) for the
-Starlark rule example and dry-run CLI.
+See [automation setup](docs/how-to/preview-automations.md) for Starlark rules,
+the BILRESA example, and the preview CLI.
 
 ## Development
 
@@ -85,6 +85,7 @@ output: text
 | Service URL (CLI) | `--server.url` | `MATTERCTL_SERVER_URL` | `http://127.0.0.1:8081` |
 | Ordinary CLI request deadline | `--request.timeout` | `MATTERCTL_REQUEST_TIMEOUT` | `5s` |
 | CLI output | `--output` | `MATTERCTL_OUTPUT` | `text` |
+| Automation files | `--automation.directory` | `MATTERCTL_AUTOMATION_DIRECTORY` | `$XDG_CONFIG_HOME/matterctl/automations` |
 
 For example, `matterctl serve --http.address 127.0.0.1:8081` restricts the
 development server to localhost. Logs go to stderr using `log/slog`.
@@ -101,10 +102,14 @@ Google Home workflow and hidden terminal input.
 task install
 ```
 
-This validates the project, builds `localhost/matterctl:latest` in the
-**rootful** Podman store, installs `deploy/matterctl.container` at
+This validates the project and saved automations, builds
+`localhost/matterctl:latest` in the **rootful** Podman store, installs a
+Quadlet generated from `deploy/matterctl.container` at
 `/etc/containers/systemd/matterctl.container`, reloads systemd, and starts or
 restarts `matterctl.service`. Run it again after changes to rebuild and deploy.
+It mounts `${XDG_CONFIG_HOME:-$HOME/.config}/matterctl/automations` read-only
+for service startup. Use `task automation:example` to save the BILRESA and Den
+Light example before installation.
 The Quadlet's `[Install]` section activates the service at boot; do not run
 `systemctl enable` on the generated unit.
 

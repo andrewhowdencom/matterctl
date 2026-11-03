@@ -23,6 +23,11 @@ const (
 const (
 	attributeOnOff                 uint32 = 0x0000
 	attributeCurrentLevel          uint32 = 0x0000
+	attributeMinLevel              uint32 = 0x0002
+	attributeMaxLevel              uint32 = 0x0003
+	attributeColorTemperature      uint32 = 0x0007
+	attributeColorTempPhysicalMin  uint32 = 0x400B
+	attributeColorTempPhysicalMax  uint32 = 0x400C
 	attributeSwitchCurrentPosition uint32 = 0x0001
 	attributeMeasuredTemperature   uint32 = 0x0000
 	attributeOccupancy             uint32 = 0x0000
@@ -37,6 +42,11 @@ const (
 	attributeEventList             uint32 = 0xFFFA
 	attributeAttributeList         uint32 = 0xFFFB
 	attributeFeatureMap            uint32 = 0xFFFC
+)
+
+const (
+	commandMoveToLevelWithOnOff   uint32 = 0x0004
+	commandMoveToColorTemperature uint32 = 0x000A
 )
 
 const (

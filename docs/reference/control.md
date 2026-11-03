@@ -28,11 +28,12 @@ field is rejected. The body is limited to 4096 bytes and rejects unknown fields.
 A success result contains `node_id`, `endpoint`, `label`, and `confirmed_at`.
 The default timeout is 10 seconds and accepts 1 to 30 seconds.
 
-## On/off control
+## On/off and toggle control
 
 ```sh
 matterctl device power on <target> [--endpoint <id>] [--timeout 10s]
 matterctl device power off <target> [--endpoint <id>] [--timeout 10s]
+matterctl device power toggle <target> [--endpoint <id>] [--timeout 10s]
 ```
 
 The target is a node ID or an unambiguous Matter label. A compatible endpoint is
@@ -41,7 +42,8 @@ endpoint ID. The endpoint must advertise the requested
 OnOff cluster command, and the device must be available. The service sends one
 command through Matter Server and never retries it automatically. After a
 successful command response, it performs fresh OnOff attribute reads until the
-requested value is observed or the overall deadline expires. Cached state from
+requested value is observed or the overall deadline expires. Toggle first
+reads the current state and then confirms the opposite state. Cached state from
 before the request cannot confirm success. The reported Matter state is the
 confirmation; check the physical light separately.
 

@@ -19,13 +19,26 @@ import (
 )
 
 func automationCommand(config *viper.Viper) *cobra.Command {
-	command := &cobra.Command{Use: "automation", Short: "Preview Starlark automation rules without controlling devices"}
+	command := &cobra.Command{Use: "automation", Short: "Check and preview Starlark automation rules"}
 	command.AddCommand(&cobra.Command{
-		Use: "check <rules.star>", Short: "Parse a rule file and count its handlers", Args: cobra.ExactArgs(1),
+		Use: "check [rules.star]", Short: "Check one file or every program in the configured directory", Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			engine, err := loadAutomation(cmd.Context(), args[0])
-			if err != nil {
-				return err
+			var count, programs int
+			if len(args) == 1 {
+				engine, err := loadAutomation(cmd.Context(), args[0])
+				if err != nil {
+					return err
+				}
+				count, programs = engine.RuleCount(), 1
+			} else {
+				loaded, err := automation.LoadDirectory(cmd.Context(), config.GetString("automation.directory"))
+				if err != nil {
+					return err
+				}
+				programs = len(loaded)
+				for _, program := range loaded {
+					count += program.Engine.RuleCount()
+				}
 			}
 			format, err := automationFormat(config)
 			if err != nil {
@@ -33,10 +46,11 @@ func automationCommand(config *viper.Viper) *cobra.Command {
 			}
 			if format == "json" {
 				return json.NewEncoder(cmd.OutOrStdout()).Encode(struct {
-					Rules int `json:"rules"`
-				}{engine.RuleCount()})
+					Programs int `json:"programs"`
+					Rules    int `json:"rules"`
+				}{programs, count})
 			}
-			_, err = fmt.Fprintf(cmd.OutOrStdout(), "%d rules registered\n", engine.RuleCount())
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "%d programs, %d rules registered\n", programs, count)
 			return err
 		},
 	})
@@ -88,17 +102,7 @@ func automationCommand(config *viper.Viper) *cobra.Command {
 }
 
 func loadAutomation(ctx context.Context, filename string) (*automation.Engine, error) {
-	// #nosec G304 -- the CLI reads the rule file explicitly selected by its caller.
-	file, err := os.Open(filename)
-	if err != nil {
-		return nil, fmt.Errorf("open rule file: %w", err)
-	}
-	defer func() { _ = file.Close() }()
-	source, err := io.ReadAll(io.LimitReader(file, 1<<20+1))
-	if err != nil {
-		return nil, fmt.Errorf("read rule file: %w", err)
-	}
-	return automation.Load(ctx, filename, source)
+	return automation.LoadFile(ctx, filename)
 }
 
 func automationFormat(config *viper.Viper) (string, error) {

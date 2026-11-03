@@ -23,8 +23,8 @@ type PowerRequest struct {
 }
 
 func (r PowerRequest) Validate() error {
-	if strings.TrimSpace(r.Target) == "" || (r.Action != "on" && r.Action != "off") || (r.TimeoutMS != 0 && (r.TimeoutMS < 1000 || r.TimeoutMS > 30000)) {
-		return errors.Join(ErrInvalidRequest, errors.New("provide a target, on/off action, and timeout from 1s to 30s"))
+	if strings.TrimSpace(r.Target) == "" || (r.Action != "on" && r.Action != "off" && r.Action != "toggle") || (r.TimeoutMS != 0 && (r.TimeoutMS < 1000 || r.TimeoutMS > 30000)) {
+		return errors.Join(ErrInvalidRequest, errors.New("provide a target, on/off/toggle action, and timeout from 1s to 30s"))
 	}
 	return nil
 }

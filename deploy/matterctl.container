@@ -12,6 +12,7 @@ ReadOnly=true
 NoNewPrivileges=true
 DropCapability=all
 Environment=MATTERCTL_HTTP_ADDRESS=:8081
+Environment=XDG_CONFIG_HOME=/config
 Exec=serve
 
 [Service]

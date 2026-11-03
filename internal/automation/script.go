@@ -163,8 +163,8 @@ func actionBuiltin(kind string) func(*starlark.Thread, *starlark.Builtin, starla
 		}
 		switch kind {
 		case "brightness":
-			if number < 0 || number > 100 {
-				return nil, fmt.Errorf("brightness must be between 0 and 100 percent")
+			if number < 1 || number > 100 {
+				return nil, fmt.Errorf("brightness must be between 1 and 100 percent; use power off for zero")
 			}
 		case "adjust_brightness":
 			if number < -10000 || number > 10000 {

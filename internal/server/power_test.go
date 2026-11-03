@@ -39,7 +39,7 @@ func TestPowerHTTPPassesEndpointAndDeadline(t *testing.T) {
 }
 
 func TestPowerHTTPRejectsUnsupportedAction(t *testing.T) {
-	request := httptest.NewRequest(http.MethodPost, api.PowerPath, strings.NewReader(`{"target":"1","action":"toggle"}`))
+	request := httptest.NewRequest(http.MethodPost, api.PowerPath, strings.NewReader(`{"target":"1","action":"blink"}`))
 	request.Header.Set("Content-Type", "application/json")
 	response := httptest.NewRecorder()
 	handler(slog.New(slog.NewTextHandler(io.Discard, nil)), WithPower(powerStub(func(context.Context, api.PowerRequest) (api.PowerResult, error) {

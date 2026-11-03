@@ -13,7 +13,7 @@ import (
 
 func powerCommand(config *viper.Viper) *cobra.Command {
 	command := &cobra.Command{Use: "power", Short: "Set and confirm a device endpoint's on/off state"}
-	for _, action := range []string{"on", "off"} {
+	for _, action := range []string{"on", "off", "toggle"} {
 		var endpoint uint16
 		var timeout time.Duration
 		action := action
@@ -39,7 +39,11 @@ func powerCommand(config *viper.Viper) *cobra.Command {
 				if format == "json" {
 					return printJSON(cmd.OutOrStdout(), result)
 				}
-				_, err = fmt.Fprintf(cmd.OutOrStdout(), "Node %s endpoint %d: %s (confirmed at %s)\n", result.NodeID, result.Endpoint, action, result.ConfirmedAt.Format(time.RFC3339))
+				state := "off"
+				if result.Power {
+					state = "on"
+				}
+				_, err = fmt.Fprintf(cmd.OutOrStdout(), "Node %s endpoint %d: %s (confirmed at %s)\n", result.NodeID, result.Endpoint, state, result.ConfirmedAt.Format(time.RFC3339))
 				return err
 			},
 		}

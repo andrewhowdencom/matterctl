@@ -14,7 +14,7 @@ func (c *Client) Power(ctx context.Context, request api.PowerRequest) (result ap
 		return result, err
 	}
 	err = c.requestJSON(ctx, "power-device", http.MethodPost, api.PowerPath, nil, request, &result, request.Timeout()+2*time.Second)
-	if err == nil && (result.NodeID == "" || result.Power != (request.Action == "on")) {
+	if err == nil && (result.NodeID == "" || (request.Action != "toggle" && result.Power != (request.Action == "on"))) {
 		err = errors.New("invalid matterctl power response")
 	}
 	return result, err

@@ -35,12 +35,14 @@ inspection, event filtering, and control. It writes supported Matter NodeLabel
 attributes and confirms them with a fresh read. Numeric node and endpoint IDs
 remain available for disambiguation. Matter Server owns label persistence.
 
-The automation prototype runs in the CLI process. It consumes projected
-inventory and event frames through the existing HTTP client, normalizes
-occupancy and Switch signals, and evaluates bounded Starlark handlers into
-action plans. The engine has no Matter adapter or command executor dependency;
-it never sends actions. Target resolution uses exact labels or node IDs and
-does not retarget an existing reference after a connection snapshot changes.
+The automation engine loads Starlark programs from an XDG config directory at
+service startup. It consumes projected inventory and event frames, normalizes
+occupancy and Switch signals, and evaluates bounded handlers into action plans.
+The Matter adapter executes planned actions through the same session used by
+the API, checking advertised commands and reading back the resulting state.
+CLI `automation watch` and `replay` use the same engine in preview mode and do
+not send actions. Target resolution uses exact labels or node IDs and does not
+retarget an existing reference after a connection snapshot changes.
 
 The browser assets are embedded in the Go binary. The page reads the inventory
 endpoint and the unfiltered NDJSON event stream from the same origin. Stream

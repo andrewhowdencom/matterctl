@@ -17,7 +17,7 @@ func TestHTTPStartupFailureStopsBackgroundConnection(t *testing.T) {
 	defer func() { _ = listener.Close() }()
 	result := make(chan error, 1)
 	go func() {
-		result <- Serve(context.Background(), listener.Addr().String(), "ws://127.0.0.1:1/ws", slog.New(slog.NewTextHandler(io.Discard, nil)))
+		result <- Serve(context.Background(), listener.Addr().String(), "ws://127.0.0.1:1/ws", t.TempDir(), slog.New(slog.NewTextHandler(io.Discard, nil)))
 	}()
 	select {
 	case err := <-result:

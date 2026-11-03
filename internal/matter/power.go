@@ -18,10 +18,10 @@ func (c *Client) Power(ctx context.Context, request api.PowerRequest) (api.Power
 	if err := ctx.Err(); err != nil {
 		return api.PowerResult{}, err
 	}
-	if !c.powering.CompareAndSwap(false, true) {
+	if !c.controlling.CompareAndSwap(false, true) {
 		return api.PowerResult{}, api.ErrBusy
 	}
-	defer c.powering.Store(false)
+	defer c.controlling.Store(false)
 	ctx, cancel := context.WithTimeout(ctx, request.Timeout())
 	defer cancel()
 
@@ -58,6 +58,23 @@ func (c *Client) Power(ctx context.Context, request api.PowerRequest) (api.Power
 	}
 	endpoint := matches[0]
 	number := json.Number(id)
+	path := fmt.Sprintf("%d/%d/%d", endpoint, clusterOnOff, attributeOnOff)
+	readArgs := struct {
+		NodeID        json.Number `json:"node_id"`
+		AttributePath string      `json:"attribute_path"`
+	}{number, path}
+	want := request.Action == "on"
+	if request.Action == "toggle" {
+		var values map[string]json.RawMessage
+		if err := c.callOnSessionWithTimeout(ctx, "read_attribute", readArgs, &values, request.Timeout(), session); err != nil {
+			return api.PowerResult{}, fmt.Errorf("read power before toggle: %w", err)
+		}
+		var current bool
+		if raw, ok := values[path]; !ok || json.Unmarshal(raw, &current) != nil {
+			return api.PowerResult{}, errors.New("cannot determine current power before toggle")
+		}
+		want = !current
+	}
 	args := struct {
 		NodeID      json.Number    `json:"node_id"`
 		EndpointID  uint16         `json:"endpoint_id"`
@@ -75,18 +92,13 @@ func (c *Client) Power(ctx context.Context, request api.PowerRequest) (api.Power
 	}
 	// A read after acknowledgement establishes state independently of the cached
 	// subscription snapshot, which might predate the command.
-	path := fmt.Sprintf("%d/%d/%d", endpoint, clusterOnOff, attributeOnOff)
-	readArgs := struct {
-		NodeID        json.Number `json:"node_id"`
-		AttributePath string      `json:"attribute_path"`
-	}{number, path}
 	for {
 		var values map[string]json.RawMessage
 		if err := c.callOnSessionWithTimeout(ctx, "read_attribute", readArgs, &values, request.Timeout(), session); err != nil {
 			return api.PowerResult{}, errors.Join(api.ErrUnconfirmed, err)
 		}
 		var power bool
-		if raw, ok := values[path]; ok && json.Unmarshal(raw, &power) == nil && power == (request.Action == "on") {
+		if raw, ok := values[path]; ok && json.Unmarshal(raw, &power) == nil && power == want {
 			return api.PowerResult{NodeID: id, Endpoint: endpoint, Power: power, ConfirmedAt: time.Now().UTC()}, nil
 		}
 		timer := time.NewTimer(200 * time.Millisecond)
