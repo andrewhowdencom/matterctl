@@ -220,6 +220,10 @@ func TestLiveUpdatesRemovalAndEventSanitization(t *testing.T) {
 	if strings.Contains(string(event.Data), "must-not-leak") || !strings.Contains(string(event.Data), `"event_number":"18446744073709551615"`) || !strings.Contains(string(event.Data), `"event_name":"initial_press"`) || !strings.Contains(string(event.Data), `"label":"Bridge"`) || !strings.Contains(string(event.Data), `"product":"Bridge"`) || !strings.Contains(string(event.Data), `"name":"Generic Switch"`) || !strings.Contains(string(event.Data), `"newPosition":1`) {
 		t.Fatalf("bad event: %s", event.Data)
 	}
+	event = apply("node_event", `{"node_id":1,"endpoint_id":2,"cluster_id":59,"event_id":5,"data":{"newPosition":1,"currentNumberOfPressesCounted":12}}`)
+	if !strings.Contains(string(event.Data), `"currentNumberOfPressesCounted":12`) {
+		t.Fatalf("ongoing press count missing: %s", event.Data)
+	}
 	event = apply("node_event", `{"node_id":1,"endpoint_id":2,"cluster_id":999,"event_id":1,"data":["must-not-leak"]}`)
 	if strings.Contains(string(event.Data), "must-not-leak") {
 		t.Fatal("arbitrary event payload leaked")

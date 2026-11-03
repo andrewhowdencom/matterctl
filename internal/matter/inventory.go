@@ -361,7 +361,7 @@ func (c *Client) applyEventLocked(frame reply, publish bool) error {
 			if err := json.Unmarshal(event.Data, &values); err != nil {
 				values = nil
 			}
-			for _, name := range []string{"newPosition", "previousPosition", "currentPosition", "totalNumberOfPressesCounted", "numberOfPressesCounted"} {
+			for _, name := range []string{"newPosition", "previousPosition", "currentPosition", "currentNumberOfPressesCounted", "totalNumberOfPressesCounted", "numberOfPressesCounted"} {
 				var value uint8
 				if raw, ok := values[name]; ok && json.Unmarshal(raw, &value) == nil {
 					fields[name] = value

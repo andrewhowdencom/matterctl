@@ -113,7 +113,9 @@ service-side `observed_at`, optional string `node_id`, and `data`:
 | `stream_error` | Stream interrupted; restart to obtain a new snapshot |
 
 Standard Switch event fields include position and press-count values when
-reported. Other event payloads are omitted; their metadata is still observable.
+reported. `presses` on `multi_press_ongoing` is the cumulative count so far in
+that sequence; `total_presses` on `multi_press_complete` is the final count.
+Other event payloads are omitted; their metadata is still observable.
 There is no durable event history. Upstream events during a disconnection cannot
 be replayed; upstream backpressure can also discard some device events. Cached
 state is replaced after reconnect, not inferred from missed events.

@@ -174,12 +174,16 @@ func printEvent(output io.Writer, event api.Event) error {
 			{"newPosition", "new_position"},
 			{"previousPosition", "previous_position"},
 			{"currentPosition", "current_position"},
-			{"numberOfPressesCounted", "presses"},
 			{"totalNumberOfPressesCounted", "total_presses"},
 		} {
 			if value, ok := update.Data[field.key]; ok {
 				line += fmt.Sprintf(" %s=%d", field.name, value)
 			}
+		}
+		if presses, ok := update.Data["currentNumberOfPressesCounted"]; ok {
+			line += fmt.Sprintf(" presses=%d", presses)
+		} else if presses, ok := update.Data["numberOfPressesCounted"]; ok {
+			line += fmt.Sprintf(" presses=%d", presses)
 		}
 	default:
 		line += " (details available with --output json)"
