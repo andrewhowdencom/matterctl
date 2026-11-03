@@ -50,6 +50,11 @@ func TestProjectionReadsNumericDescriptorDeviceTypeFields(t *testing.T) {
 	if device.Endpoints[1].DescriptorComplete || len(device.Endpoints[1].DeviceTypes) != 0 {
 		t.Fatalf("malformed device type became an invented ID: %+v", device.Endpoints[1])
 	}
+	n.Attributes["1/29/0"] = json.RawMessage(`[{"deviceType":260,"revision":4}]`)
+	device = project(n)
+	if !slices.Equal(device.Endpoints[1].DeviceTypes, []api.DeviceType{{ID: 260, Name: "Dimmer Switch", Revision: 4}}) {
+		t.Fatalf("dimmer switch type was not named: %+v", device.Endpoints[1].DeviceTypes)
+	}
 }
 
 func initializedClient(t *testing.T, nodes ...node) *Client {
@@ -212,7 +217,7 @@ func TestLiveUpdatesRemovalAndEventSanitization(t *testing.T) {
 		t.Fatal("removed state remained cached")
 	}
 	event := apply("node_event", `{"node_id":1,"endpoint_id":2,"cluster_id":59,"event_id":1,"event_number":18446744073709551615,"timestamp":18446744073709551614,"data":{"newPosition":1,"private_key":"must-not-leak"}}`)
-	if strings.Contains(string(event.Data), "must-not-leak") || !strings.Contains(string(event.Data), `"event_number":"18446744073709551615"`) || !strings.Contains(string(event.Data), `"newPosition":1`) {
+	if strings.Contains(string(event.Data), "must-not-leak") || !strings.Contains(string(event.Data), `"event_number":"18446744073709551615"`) || !strings.Contains(string(event.Data), `"event_name":"initial_press"`) || !strings.Contains(string(event.Data), `"name":"Generic Switch"`) || !strings.Contains(string(event.Data), `"newPosition":1`) {
 		t.Fatalf("bad event: %s", event.Data)
 	}
 	event = apply("node_event", `{"node_id":1,"endpoint_id":2,"cluster_id":999,"event_id":1,"data":["must-not-leak"]}`)

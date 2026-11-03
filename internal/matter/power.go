@@ -64,7 +64,7 @@ func (c *Client) Power(ctx context.Context, request api.PowerRequest) (api.Power
 		ClusterID   uint32         `json:"cluster_id"`
 		CommandName string         `json:"command_name"`
 		Payload     map[string]any `json:"payload"`
-	}{number, endpoint, 6, request.Action, map[string]any{}}
+	}{number, endpoint, clusterOnOff, request.Action, map[string]any{}}
 	var acknowledgement json.RawMessage
 	if err := c.callOnSessionWithTimeout(ctx, "device_command", args, &acknowledgement, request.Timeout(), session); err != nil {
 		var remote remoteError
@@ -75,7 +75,7 @@ func (c *Client) Power(ctx context.Context, request api.PowerRequest) (api.Power
 	}
 	// A read after acknowledgement establishes state independently of the cached
 	// subscription snapshot, which might predate the command.
-	path := fmt.Sprintf("%d/6/0", endpoint)
+	path := fmt.Sprintf("%d/%d/%d", endpoint, clusterOnOff, attributeOnOff)
 	readArgs := struct {
 		NodeID        json.Number `json:"node_id"`
 		AttributePath string      `json:"attribute_path"`

@@ -69,6 +69,18 @@ type Endpoint struct {
 	Power              *bool        `json:"power,omitempty"`
 	Level              *uint8       `json:"level,omitempty"`
 	SwitchPosition     *uint8       `json:"switch_position,omitempty"`
+	States             []State      `json:"states,omitempty"`
+}
+
+// State is an allowlisted, normalized attribute value. Value is a JSON scalar;
+// Text is its compact human-readable representation.
+type State struct {
+	ClusterID   uint32          `json:"cluster_id"`
+	AttributeID uint32          `json:"attribute_id"`
+	Name        string          `json:"name"`
+	Value       json.RawMessage `json:"value"`
+	Text        string          `json:"text"`
+	Unit        string          `json:"unit,omitempty"`
 }
 
 type DeviceType struct {

@@ -95,10 +95,62 @@ func TestEventWatchProducesNDJSONAndStopsNormallyOnCancellation(t *testing.T) {
 	}
 }
 
-func TestDeviceOutputsShowAdvertisedTypeSeparatelyFromLabel(t *testing.T) {
-	device := api.Device{NodeID: "1", Label: "Den Light", ObservedAt: time.Now(), Endpoints: []api.Endpoint{{ID: 1, DeviceTypes: []api.DeviceType{{ID: 269, Name: "Extended Color Light", Revision: 1}}}}}
+func TestEventWatchTextShowsCompactStateChanges(t *testing.T) {
+	observed := time.Date(2026, time.November, 3, 12, 30, 0, 0, time.UTC)
+	device := api.Device{NodeID: "12", Label: "Couch lamp", Available: true, Endpoints: []api.Endpoint{{ID: 1, Label: "Light", DeviceTypes: []api.DeviceType{{ID: 269, Name: "Extended Color Light"}}}}}
+	data, err := json.Marshal(struct {
+		Path   string     `json:"path"`
+		Device api.Device `json:"device"`
+		State  api.State  `json:"state"`
+	}{"1/6/0", device, api.State{ClusterID: 6, AttributeID: 0, Name: "power", Value: json.RawMessage(`true`), Text: "on"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		name  string
+		event api.Event
+		want  string
+	}{
+		{"inventory", api.Event{Type: "inventory", ObservedAt: observed, NodeID: "12", Data: json.RawMessage(`{"connection":{"state":"connected"},"ready":true,"devices":[{"node_id":"12","label":"Couch lamp","available":true,"endpoints":[{"id":1}]}]}`)}, `inventory node=12 connection=connected ready=true devices=1 available=true endpoints=1 label="Couch lamp"`},
+		{"connection", api.Event{Type: "connection", ObservedAt: observed, Data: json.RawMessage(`{"connection":{"state":"disconnected","last_error":"connection failed"},"ready":false}`)}, `connection state=disconnected ready=false reason="connection failed"`},
+		{"node update", api.Event{Type: "node_updated", ObservedAt: observed, NodeID: "12", Data: json.RawMessage(`{"node_id":"12","label":"Couch lamp","available":true,"endpoints":[{"id":1}]}`)}, `node_updated node=12 available=true endpoints=1 label="Couch lamp"`},
+		{"power", api.Event{Type: "attribute_updated", ObservedAt: observed, NodeID: "12", Data: data}, `attribute_updated node=12 attribute=1/6/0 endpoint=1 label="Light" type="Extended Color Light" power=on`},
+		{"occupancy", api.Event{Type: "attribute_updated", ObservedAt: observed, NodeID: "12", Data: json.RawMessage(`{"path":"2/1030/0","device":{"node_id":"12","endpoints":[{"id":2,"device_types":[{"id":263,"name":"Occupancy Sensor","revision":1}]}]},"state":{"cluster_id":1030,"attribute_id":0,"name":"occupancy","value":true,"text":"occupied"}}`)}, `attribute_updated node=12 attribute=2/1030/0 endpoint=2 type="Occupancy Sensor" occupancy=occupied`},
+		{"temperature", api.Event{Type: "attribute_updated", ObservedAt: observed, NodeID: "12", Data: json.RawMessage(`{"path":"3/1026/0","device":{"node_id":"12","endpoints":[{"id":3}]},"state":{"cluster_id":1026,"attribute_id":0,"name":"temperature","value":21.5,"text":"21.50°C","unit":"°C"}}`)}, `attribute_updated node=12 attribute=3/1026/0 endpoint=3 temperature=21.50°C`},
+		{"unknown attribute", api.Event{Type: "attribute_updated", ObservedAt: observed, NodeID: "12", Data: json.RawMessage(`{"path":"1/29/1","device":{"node_id":"12","endpoints":[{"id":1}]}}`)}, `attribute_updated node=12 attribute=1/29/1 endpoint=1`},
+		{"endpoint", api.Event{Type: "endpoint_added", ObservedAt: observed, NodeID: "12", Data: json.RawMessage(`{"endpoint_id":2,"device":{"node_id":"12","endpoints":[{"id":2,"label":"Switch"}]}}`)}, `endpoint_added node=12 endpoint=2 label="Switch"`},
+		{"node event", api.Event{Type: "node_event", ObservedAt: observed, NodeID: "12", Data: json.RawMessage(`{"endpoint_id":2,"cluster_id":59,"event_id":1,"event_name":"initial_press","event_number":"18446744073709551615","data":{"newPosition":1,"numberOfPressesCounted":2}}`)}, `node_event node=12 endpoint=2 cluster=59 event=1 name=initial_press number=18446744073709551615 new_position=1 presses=2`},
+		{"inventory with states", api.Event{Type: "inventory", ObservedAt: observed, NodeID: "12", Data: json.RawMessage(`{"connection":{"state":"connected"},"ready":true,"devices":[{"node_id":"12","available":true,"endpoints":[{"id":1,"device_types":[{"id":263,"name":"Occupancy Sensor","revision":1}],"states":[{"cluster_id":1030,"attribute_id":0,"name":"occupancy","value":true,"text":"occupied"}]}]}]}`)}, `inventory node=12 connection=connected ready=true devices=1 available=true endpoints=1 types="Occupancy Sensor" states="occupancy=occupied"`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var output bytes.Buffer
+			if err := printEvent(&output, tt.event); err != nil {
+				t.Fatal(err)
+			}
+			want := observed.Format(time.RFC3339) + " " + tt.want + "\n"
+			if output.String() != want {
+				t.Fatalf("got %q, want %q", output.String(), want)
+			}
+		})
+	}
 	var output bytes.Buffer
-	if err := printDevice(&output, device); err != nil || !strings.Contains(output.String(), "Extended Color Light (269, revision 1)") {
+	if err := printEvent(&output, api.Event{Type: "heartbeat"}); err != nil || output.Len() != 0 {
+		t.Fatalf("heartbeat should be hidden in text mode: %v %q", err, output.String())
+	}
+	switches := api.Device{Available: true, Endpoints: []api.Endpoint{{ID: 0}}}
+	for id := uint16(1); id <= 9; id++ {
+		switches.Endpoints = append(switches.Endpoints, api.Endpoint{ID: id, DeviceTypes: []api.DeviceType{{ID: 15, Name: "Generic Switch"}}, States: []api.State{{Name: "switch_position", Text: "0"}}})
+	}
+	if summary := deviceSummary(switches); summary != ` available=true endpoints=10 types="Generic Switch (9 endpoints)" states="switch_position=0 (9 endpoints)"` {
+		t.Fatalf("multi-endpoint summary was not compact: %s", summary)
+	}
+}
+
+func TestDeviceOutputsShowAdvertisedTypeSeparatelyFromLabel(t *testing.T) {
+	device := api.Device{NodeID: "1", Label: "Den Light", ObservedAt: time.Now(), Endpoints: []api.Endpoint{{ID: 1, DeviceTypes: []api.DeviceType{{ID: 269, Name: "Extended Color Light", Revision: 1}}, States: []api.State{{Name: "temperature", Text: "21.50°C"}}}}}
+	var output bytes.Buffer
+	if err := printDevice(&output, device); err != nil || !strings.Contains(output.String(), "Extended Color Light (269, revision 1)") || !strings.Contains(output.String(), "temperature: 21.50°C") {
 		t.Fatalf("inspect omitted device type: %v %s", err, &output)
 	}
 	output.Reset()
