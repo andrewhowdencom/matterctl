@@ -107,6 +107,9 @@ func TestProjectionPreservesRolesUnknownCommandsAndPrivateAttributes(t *testing.
 	if !slices.Equal(light.Capabilities, []string{"power.off", "power.on", "power.toggle"}) || light.Power == nil || *light.Power || light.Level == nil || *light.Level != 42 {
 		t.Fatalf("light capabilities/state: %+v", light)
 	}
+	if light.ServerClusters[0].AttributeNames[0] != "OnOff" || light.ServerClusters[0].AttributeNames[attributeFeatureMap] != "FeatureMap" || light.ServerClusters[0].AcceptedCommands[1].Name != "On" {
+		t.Fatalf("standard OnOff names missing: %+v", light.ServerClusters[0])
+	}
 	if len(button.Capabilities) != 0 || button.Power != nil || len(button.ClientClusters) != 1 || button.ClientClusters[0].ID != 6 {
 		t.Fatalf("client OnOff cluster was treated as a server: %+v", button)
 	}
@@ -217,7 +220,7 @@ func TestLiveUpdatesRemovalAndEventSanitization(t *testing.T) {
 		t.Fatal("removed state remained cached")
 	}
 	event := apply("node_event", `{"node_id":1,"endpoint_id":2,"cluster_id":59,"event_id":1,"event_number":18446744073709551615,"timestamp":18446744073709551614,"data":{"newPosition":1,"private_key":"must-not-leak"}}`)
-	if strings.Contains(string(event.Data), "must-not-leak") || !strings.Contains(string(event.Data), `"event_number":"18446744073709551615"`) || !strings.Contains(string(event.Data), `"event_name":"initial_press"`) || !strings.Contains(string(event.Data), `"label":"Bridge"`) || !strings.Contains(string(event.Data), `"product":"Bridge"`) || !strings.Contains(string(event.Data), `"name":"Generic Switch"`) || !strings.Contains(string(event.Data), `"newPosition":1`) {
+	if strings.Contains(string(event.Data), "must-not-leak") || !strings.Contains(string(event.Data), `"event_number":"18446744073709551615"`) || !strings.Contains(string(event.Data), `"event_name":"initial_press"`) || !strings.Contains(string(event.Data), `"cluster_name":"Switch"`) || !strings.Contains(string(event.Data), `"label":"Bridge"`) || !strings.Contains(string(event.Data), `"product":"Bridge"`) || !strings.Contains(string(event.Data), `"name":"Generic Switch"`) || !strings.Contains(string(event.Data), `"newPosition":1`) {
 		t.Fatalf("bad event: %s", event.Data)
 	}
 	event = apply("node_event", `{"node_id":1,"endpoint_id":2,"cluster_id":999,"event_id":1,"data":["must-not-leak"]}`)

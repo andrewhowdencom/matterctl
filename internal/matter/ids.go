@@ -1,8 +1,7 @@
 package matter
 
-// Matter IDs used by this adapter. Devices advertise their actual types,
-// clusters, attributes, and feature maps; these constants name the subset we
-// interpret. Source: https://github.com/project-chip/connectedhomeip/tree/master/data_model
+// IDs needed by state decoders and device commands. Standard display names are
+// generated separately in catalog_generated.go from the pinned Matter catalog.
 const (
 	clusterIdentify                 uint32 = 0x0003
 	clusterGroups                   uint32 = 0x0004
@@ -16,6 +15,7 @@ const (
 	clusterWindowCovering           uint32 = 0x0102
 	clusterThermostat               uint32 = 0x0201
 	clusterColorControl             uint32 = 0x0300
+	clusterIlluminanceMeasurement   uint32 = 0x0400
 	clusterTemperatureMeasurement   uint32 = 0x0402
 	clusterOccupancySensing         uint32 = 0x0406
 )
@@ -29,6 +29,7 @@ const (
 	attributeColorTempPhysicalMin  uint32 = 0x400B
 	attributeColorTempPhysicalMax  uint32 = 0x400C
 	attributeSwitchCurrentPosition uint32 = 0x0001
+	attributeMeasuredIlluminance   uint32 = 0x0000
 	attributeMeasuredTemperature   uint32 = 0x0000
 	attributeOccupancy             uint32 = 0x0000
 	attributeDeviceTypeList        uint32 = 0x0000
@@ -47,27 +48,4 @@ const (
 const (
 	commandMoveToLevelWithOnOff   uint32 = 0x0004
 	commandMoveToColorTemperature uint32 = 0x000A
-)
-
-const (
-	deviceTypeGenericSwitch      uint32 = 0x000F
-	deviceTypeOnOffLight         uint32 = 0x0100
-	deviceTypeDimmableLight      uint32 = 0x0101
-	deviceTypeOnOffLightSwitch   uint32 = 0x0103
-	deviceTypeDimmerSwitch       uint32 = 0x0104
-	deviceTypeColorDimmerSwitch  uint32 = 0x0105
-	deviceTypeOccupancySensor    uint32 = 0x0107
-	deviceTypeColorTempLight     uint32 = 0x010C
-	deviceTypeExtendedColorLight uint32 = 0x010D
-	deviceTypeTemperatureSensor  uint32 = 0x0302
-)
-
-const (
-	switchEventLatched            uint32 = 0x00
-	switchEventInitialPress       uint32 = 0x01
-	switchEventLongPress          uint32 = 0x02
-	switchEventShortRelease       uint32 = 0x03
-	switchEventLongRelease        uint32 = 0x04
-	switchEventMultiPressOngoing  uint32 = 0x05
-	switchEventMultiPressComplete uint32 = 0x06
 )

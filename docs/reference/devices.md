@@ -55,17 +55,20 @@ plus `available`, `is_bridge`, `observed_at`, and `endpoints`. An endpoint has:
 | `power`, `level`, `switch_position` | Selected cached state, omitted when unknown |
 | `states` | Allowlisted, normalized state values with cluster/attribute IDs, name, JSON scalar value, display text, and optional unit |
 
-Clusters expose their ID, a known name when available, accepted commands,
-attribute/event IDs, and a validated feature map when present. Unknown names
-remain numeric IDs. `accepted_commands: null` means metadata is unavailable;
-`accepted_commands: []` is a known empty list. This phase names the OnOff
-commands `off`, `on`, and `toggle`; other commands retain their IDs.
+Clusters expose their ID, a standard name when available, accepted commands,
+attribute/event IDs and optional `attribute_names`/`event_names` maps, and a
+validated feature map when present. Unknown names remain numeric IDs.
+`accepted_commands: null` means metadata is unavailable;
+`accepted_commands: []` is a known empty list. Standard accepted commands use
+their Matter names, including `Off`, `On`, and `Toggle` for OnOff.
 
 The API projects selected fields rather than returning raw node dumps.
-`states` currently covers OnOff, LevelControl, Switch, OccupancySensing, and
-TemperatureMeasurement values. Occupancy is a Boolean in JSON and
-`occupied`/`unoccupied` in text. Temperature is converted from hundredths of a
-degree Celsius to degrees Celsius. Null or invalid values do not appear in
+`states` currently covers OnOff, LevelControl, Switch, IlluminanceMeasurement,
+OccupancySensing, and TemperatureMeasurement values. Occupancy is a Boolean in
+JSON and `occupied`/`unoccupied` in text. Temperature is converted from
+hundredths of a degree Celsius to degrees Celsius. Illuminance is converted
+from Matter's logarithmic measurement to lux; zero means below the measurable
+range. Null or invalid values do not appear in
 inventory states. Unselected attribute values, including commissioning/security
 data, are not exposed. Attribute IDs can still be inspected.
 
@@ -108,7 +111,7 @@ service-side `observed_at`, optional string `node_id`, and `data`:
 | `node_removed` | String node ID |
 | `attribute_updated` | Attribute path, standard name when known, updated projected device, and optional decoded `state` |
 | `endpoint_added`, `endpoint_removed` | Endpoint ID and updated projected device |
-| `node_event` | Endpoint/cluster/event IDs, node label and product when known, standard Switch event name when known, counter/timestamp strings, timestamp type, priority, and selected event fields |
+| `node_event` | Endpoint/cluster/event IDs, cluster name, node label and product when known, standard event name when known, counter/timestamp strings, timestamp type, priority, and selected Switch event fields |
 | `heartbeat` | Empty object, every 15 seconds |
 | `stream_error` | Stream interrupted; restart to obtain a new snapshot |
 
@@ -138,16 +141,19 @@ ID distinguishes devices with the same name. For `attribute_updated`, it shows
 the standard attribute name when known, numeric path, endpoint type, and
 decoded state when available. A cleared known value appears as `unknown`.
 Unknown attributes retain their numeric path without exposing the
-raw value. For `node_event`, it shows endpoint, cluster, event ID, known Switch
-event name, event number, and supported Switch fields. JSON output retains the
-full projected event object.
+raw value. For `node_event`, it shows endpoint, cluster ID and name, event ID,
+known standard event name, event number, and supported Switch fields. JSON
+output retains the full projected event object.
 
-Matter defines the IDs for device types, clusters, attributes, and cluster
-feature maps. The device advertises which types and server/client clusters it
-has; `device inspect` reports those IDs and known names. The adapter's
-[`ids.go`](../../internal/matter/ids.go) names the subset currently interpreted,
-and state decoders are keyed by cluster and attribute rather than device model.
-The source catalog is the [Matter data model](https://github.com/project-chip/connectedhomeip/tree/master/data_model).
+Matter defines the IDs for device types, clusters, attributes, commands, and
+events. The device advertises which types and server/client clusters it has;
+`device inspect` reports those IDs and standard names. Names come from the
+generated [Matter 1.6.1 catalog](../../internal/matter/catalog_generated.go),
+pinned to the connectedhomeip `v1.6.1.0` release. Run `go generate ./internal/matter`
+to refresh it after updating the revision in
+[`gen/main.go`](../../internal/matter/gen/main.go). State decoders
+remain keyed by cluster and attribute because a name does not define a usable
+value conversion. Unknown or manufacturer-specific IDs retain numeric paths.
 
 A Dimmable Light with a LevelControl server reports its current level through
 the `level` state decoder. A Dimmer Switch advertises a different device type

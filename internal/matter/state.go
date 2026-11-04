@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"math"
 
 	"github.com/andrewhowdencom/matterctl/internal/api"
 )
@@ -11,7 +12,6 @@ import (
 type stateDecoder struct {
 	clusterID   uint32
 	attributeID uint32
-	matterName  string
 	name        string
 	unit        string
 	decode      func(json.RawMessage) (any, string, bool)
@@ -21,21 +21,13 @@ type stateDecoder struct {
 // Only decoded scalar values cross the application API boundary.
 func builtInStateDecoders() []stateDecoder {
 	return []stateDecoder{
-		{clusterOnOff, attributeOnOff, "OnOff.OnOff", "power", "", decodePower},
-		{clusterLevelControl, attributeCurrentLevel, "LevelControl.CurrentLevel", "level", "", decodeByte},
-		{clusterSwitch, attributeSwitchCurrentPosition, "Switch.CurrentPosition", "switch_position", "", decodeByte},
-		{clusterTemperatureMeasurement, attributeMeasuredTemperature, "TemperatureMeasurement.MeasuredValue", "temperature", "°C", decodeTemperature},
-		{clusterOccupancySensing, attributeOccupancy, "OccupancySensing.Occupancy", "occupancy", "", decodeOccupancy},
+		{clusterOnOff, attributeOnOff, "power", "", decodePower},
+		{clusterLevelControl, attributeCurrentLevel, "level", "", decodeByte},
+		{clusterSwitch, attributeSwitchCurrentPosition, "switch_position", "", decodeByte},
+		{clusterIlluminanceMeasurement, attributeMeasuredIlluminance, "illuminance", "lx", decodeIlluminance},
+		{clusterTemperatureMeasurement, attributeMeasuredTemperature, "temperature", "°C", decodeTemperature},
+		{clusterOccupancySensing, attributeOccupancy, "occupancy", "", decodeOccupancy},
 	}
-}
-
-func attributeName(clusterID, attributeID uint32) string {
-	for _, decoder := range builtInStateDecoders() {
-		if decoder.clusterID == clusterID && decoder.attributeID == attributeID {
-			return decoder.matterName
-		}
-	}
-	return ""
 }
 
 func decodeState(clusterID, attributeID uint32, raw json.RawMessage) (api.State, bool) {
@@ -88,6 +80,22 @@ func decodeTemperature(raw json.RawMessage) (any, string, bool) {
 	}
 	value := float64(centiCelsius) / 100
 	return value, fmt.Sprintf("%.2f°C", value), true
+}
+
+func decodeIlluminance(raw json.RawMessage) (any, string, bool) {
+	var measured uint16
+	if json.Unmarshal(raw, &measured) != nil {
+		return nil, "", false
+	}
+	if measured == 0xFFFF {
+		return nil, "unknown", true
+	}
+	if measured == 0 {
+		return 0, "below measurable range", true
+	}
+	// Matter encodes illuminance logarithmically: measured = 10000*log10(lx)+1.
+	lux := math.Pow(10, float64(measured-1)/10000)
+	return lux, fmt.Sprintf("%.1f lx", lux), true
 }
 
 func decodeOccupancy(raw json.RawMessage) (any, string, bool) {

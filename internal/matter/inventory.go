@@ -354,9 +354,8 @@ func (c *Client) applyEventLocked(frame reply, publish bool) error {
 			}
 		}
 		fields := map[string]uint8{}
-		eventName := ""
+		name := eventName(event.ClusterID, event.EventID)
 		if event.ClusterID == clusterSwitch {
-			eventName = switchEventName(event.EventID)
 			var values map[string]json.RawMessage
 			if err := json.Unmarshal(event.Data, &values); err != nil {
 				values = nil
@@ -371,6 +370,7 @@ func (c *Client) applyEventLocked(frame reply, publish bool) error {
 		data = struct {
 			EndpointID    uint16           `json:"endpoint_id"`
 			ClusterID     uint32           `json:"cluster_id"`
+			ClusterName   string           `json:"cluster_name,omitempty"`
 			EventID       uint32           `json:"event_id"`
 			EventName     string           `json:"event_name,omitempty"`
 			EventNumber   string           `json:"event_number,omitempty"`
@@ -381,7 +381,7 @@ func (c *Client) applyEventLocked(frame reply, publish bool) error {
 			Product       string           `json:"product,omitempty"`
 			DeviceTypes   []api.DeviceType `json:"device_types,omitempty"`
 			Data          map[string]uint8 `json:"data"`
-		}{event.EndpointID, event.ClusterID, event.EventID, eventName, event.EventNumber.String(), event.Timestamp.String(), event.TimestampType, event.Priority, label, product, deviceTypes, fields}
+		}{event.EndpointID, event.ClusterID, clusterName(event.ClusterID), event.EventID, name, event.EventNumber.String(), event.Timestamp.String(), event.TimestampType, event.Priority, label, product, deviceTypes, fields}
 	default:
 		return nil
 	}
@@ -392,25 +392,4 @@ func (c *Client) applyEventLocked(frame reply, publish bool) error {
 		c.publishLocked(newEvent(frame.Event, id, data))
 	}
 	return nil
-}
-
-func switchEventName(id uint32) string {
-	switch id {
-	case switchEventLatched:
-		return "switch_latched"
-	case switchEventInitialPress:
-		return "initial_press"
-	case switchEventLongPress:
-		return "long_press"
-	case switchEventShortRelease:
-		return "short_release"
-	case switchEventLongRelease:
-		return "long_release"
-	case switchEventMultiPressOngoing:
-		return "multi_press_ongoing"
-	case switchEventMultiPressComplete:
-		return "multi_press_complete"
-	default:
-		return ""
-	}
 }

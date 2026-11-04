@@ -27,8 +27,9 @@ matterctl device inspect "Couch lamp" --output json
 ```
 
 Inspection shows every observed endpoint on the node, its parent when known,
-device types, server and client clusters, command metadata, features, and
-selected state. A light can accept OnOff commands on a server cluster; a switch
+device types, server and client clusters, standard attribute and event names,
+command metadata, features, and selected state. A light can accept OnOff
+commands on a server cluster; a switch
 with an OnOff client cluster sends commands and does not gain power controls
 merely from that cluster's presence. `accepted_commands: null` means unknown,
 while `[]` means the server advertised no accepted commands.
@@ -54,12 +55,14 @@ per line, suitable for scripts. Text mode writes compact lines, for example:
 2026-11-03T12:30:00Z inventory node=12 connection=connected ready=true devices=1 available=true endpoints=1 label="Couch lamp" types="Extended Color Light" states="power=off"
 2026-11-03T12:30:04Z attribute_updated node=12 device="Couch lamp" attribute=OnOff.OnOff path=1/6/0 endpoint=1 label="Light" type="Extended Color Light" power=on
 2026-11-03T12:31:02Z attribute_updated node=15 attribute=OccupancySensing.Occupancy path=1/1030/0 endpoint=1 type="Occupancy Sensor" occupancy=occupied
+2026-11-03T12:31:04Z attribute_updated node=15 device="Presence Multi-Sensor FP300" attribute=IlluminanceMeasurement.MeasuredValue path=2/1024/0 endpoint=2 type="Light Sensor" illuminance=10.0 lx
 2026-11-03T12:31:05Z attribute_updated node=16 attribute=TemperatureMeasurement.MeasuredValue path=1/1026/0 endpoint=1 type="Temperature Sensor" temperature=21.50°C
-2026-11-03T12:31:09Z node_event node=2 device="BILRESA scroll wheel" endpoint=2 cluster=59 event=1 name=initial_press type="Generic Switch" number=42 new_position=1
+2026-11-03T12:31:09Z node_event node=2 device="BILRESA scroll wheel" endpoint=2 cluster=59 cluster_name=Switch event=1 name=initial_press type="Generic Switch" number=42 new_position=1
 ```
 
 Text mode shows the advertised endpoint type and recognized power, level,
-switch-position, occupancy, and temperature values. Inventory and node updates
+switch-position, occupancy, illuminance, and temperature values. Inventory and
+node updates
 include a compact summary of up to four distinct types and states, with counts
 for types repeated across endpoints. Recognized attribute updates show their
 standard Matter name and numeric path without a full device snapshot. Unknown

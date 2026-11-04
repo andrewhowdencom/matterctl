@@ -142,7 +142,7 @@ func project(n node) api.Device {
 			if !slices.ContainsFunc(endpoint.ServerClusters, func(cluster api.Cluster) bool { return cluster.ID == clusterID }) {
 				continue
 			}
-			if state, known := decodeState(clusterID, attributeID, raw); known {
+			if state, known := decodeState(clusterID, attributeID, raw); known && string(state.Value) != "null" {
 				endpoint.States = append(endpoint.States, state)
 			}
 		}
@@ -157,43 +157,12 @@ func project(n node) api.Device {
 	return device
 }
 
-func deviceTypeName(id uint32) string {
-	switch id {
-	case deviceTypeGenericSwitch:
-		return "Generic Switch"
-	case deviceTypeOnOffLight:
-		return "On/Off Light"
-	case deviceTypeDimmableLight:
-		return "Dimmable Light"
-	case deviceTypeOnOffLightSwitch:
-		return "On/Off Light Switch"
-	case deviceTypeDimmerSwitch:
-		return "Dimmer Switch"
-	case deviceTypeColorDimmerSwitch:
-		return "Color Dimmer Switch"
-	case deviceTypeColorTempLight:
-		return "Color Temperature Light"
-	case deviceTypeExtendedColorLight:
-		return "Extended Color Light"
-	case deviceTypeOccupancySensor:
-		return "Occupancy Sensor"
-	case deviceTypeTemperatureSensor:
-		return "Temperature Sensor"
-	default:
-		return ""
-	}
-}
-
 func projectCluster(n node, endpoint uint16, id uint32) api.Cluster {
 	cluster := api.Cluster{ID: id, Name: clusterName(id), Attributes: []uint32{}, Events: []uint32{}}
 	if commands, known := attribute[[]uint32](n, endpoint, id, attributeAcceptedCommands); known {
 		cluster.AcceptedCommands = []api.Command{}
 		for _, command := range uniqueSorted(commands) {
-			name := ""
-			if id == clusterOnOff {
-				name = powerName(command)
-			}
-			cluster.AcceptedCommands = append(cluster.AcceptedCommands, api.Command{ID: command, Name: name})
+			cluster.AcceptedCommands = append(cluster.AcceptedCommands, api.Command{ID: command, Name: commandName(id, command)})
 		}
 	}
 	attrs, _ := attribute[[]uint32](n, endpoint, id, attributeAttributeList)
@@ -203,8 +172,24 @@ func projectCluster(n node, endpoint uint16, id uint32) api.Cluster {
 		}
 	}
 	cluster.Attributes = uniqueSorted(attrs)
+	for _, attributeID := range cluster.Attributes {
+		if name := attributeMemberName(id, attributeID); name != "" {
+			if cluster.AttributeNames == nil {
+				cluster.AttributeNames = make(map[uint32]string)
+			}
+			cluster.AttributeNames[attributeID] = name
+		}
+	}
 	events, _ := attribute[[]uint32](n, endpoint, id, attributeEventList)
 	cluster.Events = uniqueSorted(events)
+	for _, eventID := range cluster.Events {
+		if name := standardEvents[memberKey{id, eventID}]; name != "" {
+			if cluster.EventNames == nil {
+				cluster.EventNames = make(map[uint32]string)
+			}
+			cluster.EventNames[eventID] = name
+		}
+	}
 	// FeatureMap is either a bitmask or matter.js's decoded boolean object.
 	if raw, ok := attribute[json.RawMessage](n, endpoint, id, attributeFeatureMap); ok {
 		var bits uint32
@@ -232,14 +217,8 @@ func uniqueSorted(values []uint32) []uint32 {
 }
 
 func powerName(id uint32) string {
-	return map[uint32]string{0: "off", 1: "on", 2: "toggle"}[id]
-}
-
-func clusterName(id uint32) string {
-	return map[uint32]string{
-		clusterIdentify: "Identify", clusterGroups: "Groups", clusterOnOff: "OnOff", clusterLevelControl: "LevelControl", clusterDescriptor: "Descriptor",
-		clusterBasicInformation: "BasicInformation", clusterBridgedDeviceInformation: "BridgedDeviceBasicInformation", clusterSwitch: "Switch",
-		clusterDoorLock: "DoorLock", clusterWindowCovering: "WindowCovering", clusterThermostat: "Thermostat", clusterColorControl: "ColorControl",
-		clusterTemperatureMeasurement: "TemperatureMeasurement", clusterOccupancySensing: "OccupancySensing",
-	}[id]
+	if id > 2 {
+		return ""
+	}
+	return strings.ToLower(commandName(clusterOnOff, id))
 }

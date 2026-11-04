@@ -175,7 +175,7 @@ func printDevice(output io.Writer, device api.Device) error {
 						}
 						commands = string(encoded)
 					}
-					if _, err := fmt.Fprintf(output, "    Accepted commands: %s\n    Attributes: %v\n    Events: %v\n", commands, cluster.Attributes, cluster.Events); err != nil {
+					if _, err := fmt.Fprintf(output, "    Accepted commands: %s\n    Attributes: %s\n    Events: %s\n", commands, namedIDs(cluster.Attributes, cluster.AttributeNames), namedIDs(cluster.Events, cluster.EventNames)); err != nil {
 						return err
 					}
 					if cluster.FeatureMap != nil {
@@ -188,6 +188,18 @@ func printDevice(output io.Writer, device api.Device) error {
 		}
 	}
 	return nil
+}
+
+func namedIDs(ids []uint32, names map[uint32]string) string {
+	items := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if name := names[id]; name != "" {
+			items = append(items, fmt.Sprintf("%d (%s)", id, name))
+		} else {
+			items = append(items, fmt.Sprint(id))
+		}
+	}
+	return "[" + strings.Join(items, ", ") + "]"
 }
 
 func deviceTypeSummary(types []api.DeviceType) string {
