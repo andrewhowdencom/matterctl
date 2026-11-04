@@ -5,7 +5,7 @@ bilresa = device("2")
 presence = device("Presence Multi-Sensor FP300")
 
 def bind_toggle(button, endpoint, light):
-    on(short_press(button, endpoint=endpoint), lambda event: [toggle(light)])
+    on(short_release(button, endpoint=endpoint), lambda event: [toggle(light)])
 
 def daytime(event):
     return [
@@ -15,6 +15,6 @@ def daytime(event):
     ]
 
 on(occupied(presence, endpoint=1), daytime)
-on(wheel(bilresa, up=7, down=8),
+on(wheel_step(bilresa, up=7, down=8),
    lambda event: [adjust_brightness(den, event.steps * 5)])
 bind_toggle(bilresa, 9, den)
