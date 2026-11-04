@@ -19,3 +19,21 @@ func (c *Client) SetLabel(ctx context.Context, request api.LabelRequest) (result
 	}
 	return result, err
 }
+
+// SetLabelAfterCommission allows the new node a few seconds to enter the live
+// inventory. Only a missing node is retried; an uncertain write is not repeated.
+func (c *Client) SetLabelAfterCommission(ctx context.Context, request api.LabelRequest) (api.LabelResult, error) {
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		result, err := c.SetLabel(ctx, request)
+		var failure responseError
+		if err == nil || !errors.As(err, &failure) || failure.code != http.StatusNotFound || time.Now().After(deadline) {
+			return result, err
+		}
+		select {
+		case <-ctx.Done():
+			return api.LabelResult{}, ctx.Err()
+		case <-time.After(250 * time.Millisecond):
+		}
+	}
+}

@@ -12,8 +12,9 @@ Google Home does not establish Matter support.
 2. In Google Home, open the selected device's settings and its Matter sharing
    option (often **Linked Matter apps & services**). Obtain a fresh pairing code
    while the sharing window is open. Leave the device on its existing network.
-3. Paste or type the manual code, or paste an `MT:` QR payload, then select
-   **Add device** in the form. Keep the page open while Matter Server works.
+3. Paste or type the manual code, or paste an `MT:` QR payload. Optionally enter
+   a device name, then select **Add device**. Keep the page open while Matter
+   Server adds the device and confirms its label.
 4. On success, the page shows the new node ID and refreshes the device list.
    Check that the device is present and remains usable in Google Home.
 
@@ -43,24 +44,32 @@ provision a fresh device over Bluetooth, Wi-Fi, or Thread.
    unset matterctl_pairing_code
    ```
 
-   The CLI reports that it is waiting, then prints the commissioned device and
+   The CLI asks for an optional device name on a terminal before commissioning.
+   Press Enter to skip it, or use `--name "Den Light"` in a script. The CLI
+   reports that it is waiting, then prints the commissioned device and
    its endpoint capabilities when Matter Server confirms completion. The default
    wait is five minutes; use `--timeout 7m` if needed. `--output json` prints the
-   device as JSON on stdout, with waiting/completion messages on stderr.
+   device as JSON on stdout, with waiting/completion messages on stderr. JSON
+   mode does not prompt; use `--name` to set a name in that mode.
 5. Run `./bin/matterctl device list`, then `./bin/matterctl device inspect <node>`
    using the returned node ID. Look for `power.on` and `power.off` on an endpoint.
    A light device type alone does not guarantee those commands are advertised.
 6. Verify the light remains usable in Google Home. Sharing adds Matter Server
    as another controller; this workflow does not request removal from Google Home.
 
-Matter labels may differ from Google Home's names. Write the node's Matter
-label, then use that name for control:
+Matter labels may differ from Google Home's names. If you skipped the name or
+the device rejected the write, set the node's Matter label later, then use that
+name for control:
 
 ```sh
 ./bin/matterctl device label set <node-id> "Den Light"
 ./bin/matterctl device power on "Den Light"
 ./bin/matterctl device power off "Den Light"
 ```
+
+Commissioning can succeed while the later label write fails. In that case,
+matterctl reports the new node ID and the naming failure. Use that node ID to
+retry `device label set`; do not repeat commissioning to fix a name.
 
 Numeric node and endpoint IDs also work:
 

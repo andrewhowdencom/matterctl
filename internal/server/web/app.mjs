@@ -8,6 +8,10 @@ export function validCommissionCode(value) {
   return (digits.length === 11 || digits.length === 21) && /^[0-9]+$/.test(digits);
 }
 
+export function validDeviceName(value) {
+  return value === "" || (value === value.trim() && !/[\p{Cc}]/u.test(value) && new TextEncoder().encode(value).length <= 32);
+}
+
 export async function submitCommission(code, signal, fetchImpl = fetch) {
   const response = await fetchImpl("/api/v1/devices/commission", {
     method: "POST",
@@ -27,8 +31,42 @@ export async function submitCommission(code, signal, fetchImpl = fetch) {
   return { status: response.status, data };
 }
 
-export function commissionOutcome(result) {
+export async function submitLabel(nodeId, name, signal, fetchImpl = fetch) {
+  const response = await fetchImpl("/api/v1/devices/label", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ target: nodeId, label: name }),
+    credentials: "same-origin",
+    cache: "no-store",
+    redirect: "error",
+    signal,
+  });
+  let data;
+  try {
+    data = await response.json();
+  } catch {
+    data = null;
+  }
+  return { status: response.status, data };
+}
+
+async function labelAfterCommission(nodeId, name, signal, fetchImpl) {
+  const deadline = Date.now() + 5000;
+  for (;;) {
+    const result = await submitLabel(nodeId, name, signal, fetchImpl);
+    if (result.status !== 404 || Date.now() >= deadline || signal.aborted) return result;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+}
+
+export function commissionOutcome(result, naming) {
   if (result.status === 200 && typeof result.data?.node_id === "string" && result.data.node_id) {
+    if (naming && naming.status !== 200) {
+      return { kind: "naming", message: `Device added as node ${result.data.node_id}, but its name could not be confirmed. Use the device label set command with this node ID to name it later.` };
+    }
+    if (naming?.status === 200) {
+      return { kind: "success", message: `${naming.name} was added as node ${result.data.node_id}.` };
+    }
     return { kind: "success", message: `${deviceName(result.data)} was added as node ${result.data.node_id}.` };
   }
   if (result.status === 400) return { kind: "invalid", message: "That sharing code was not accepted. Check it or obtain a fresh code." };
@@ -42,11 +80,22 @@ export function commissionOutcome(result) {
   return { kind: "uncertain", message: "The result is unknown. Matter Server may still be adding the device. Check the device list before trying again." };
 }
 
-export function beginCommission(code, { fetchImpl = fetch, timeoutMs = 5 * 60 * 1000 + 15 * 1000 } = {}) {
+export function beginCommission(code, { name = "", fetchImpl = fetch, timeoutMs = 5 * 60 * 1000 + 15 * 1000, onCommissioned = () => {} } = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   const result = submitCommission(code, controller.signal, fetchImpl)
-    .then(commissionOutcome, () => commissionOutcome({ status: 0 }))
+    .then(async (commission) => {
+      if (!name || commission.status !== 200 || !commission.data?.node_id) return commissionOutcome(commission);
+      onCommissioned(commission.data.node_id);
+      let naming;
+      try {
+        naming = await labelAfterCommission(commission.data.node_id, name, controller.signal, fetchImpl);
+        if (naming.status === 200 && (naming.data?.node_id !== commission.data.node_id || naming.data?.label !== name)) naming = { status: 0 };
+      } catch {
+        naming = { status: 0 };
+      }
+      return commissionOutcome(commission, { ...naming, name });
+    }, () => commissionOutcome({ status: 0 }))
     .finally(() => clearTimeout(timer));
   return { result, stop: () => { clearTimeout(timer); controller.abort(); } };
 }
@@ -251,6 +300,7 @@ async function start() {
   let state = initialState();
   let closed = false;
   let commissionPending = false;
+  let commissionedNodeID = null;
   let commissionAttempt = 0;
   let commissionOperation;
   let commissionMessage = null;
@@ -258,6 +308,7 @@ async function start() {
   const panel = document.querySelector("#commission-panel");
   const form = document.querySelector("#commission-form");
   const codeInput = document.querySelector("#commission-code");
+  const nameInput = document.querySelector("#commission-name");
   const submitButton = document.querySelector("#commission-submit");
   const stopButton = document.querySelector("#commission-stop");
   const closeButton = document.querySelector("#commission-close");
@@ -268,8 +319,9 @@ async function start() {
     render(state);
     addButton.disabled = state.status !== "ready" || commissionPending;
     submitButton.disabled = state.status !== "ready" || commissionPending;
+    nameInput.disabled = commissionPending;
     closeButton.disabled = commissionPending;
-    stopButton.hidden = !commissionPending;
+    stopButton.hidden = !commissionPending || commissionedNodeID !== null;
     status.hidden = !commissionMessage;
     status.className = `commission-status${commissionMessage ? ` commission-${commissionMessage.kind}` : ""}`;
     status.textContent = commissionMessage?.message || "";
@@ -292,6 +344,7 @@ async function start() {
     addButton.setAttribute("aria-expanded", "false");
     commissionMessage = null;
     clearCode();
+    nameInput.value = "";
     renderAll();
     addButton.focus();
   });
@@ -315,15 +368,29 @@ async function start() {
     event.preventDefault();
     if (commissionPending || state.status !== "ready") return;
     const code = codeInput.value.trim();
+    const name = nameInput.value;
     if (!validCommissionCode(code)) {
       commissionMessage = { kind: "invalid", message: "Enter an 11- or 21-digit manual code, or a complete MT: QR payload." };
       renderAll();
       codeInput.focus();
       return;
     }
+    if (!validDeviceName(name)) {
+      commissionMessage = { kind: "invalid", message: "Use a name of at most 32 UTF-8 bytes, without leading or trailing spaces or control characters." };
+      renderAll();
+      nameInput.focus();
+      return;
+    }
     const attempt = ++commissionAttempt;
     commissionPending = true;
-    const operation = beginCommission(code);
+    commissionedNodeID = null;
+    const operation = beginCommission(code, { name, onCommissioned: (nodeID) => {
+      if (attempt !== commissionAttempt) return;
+      commissionedNodeID = nodeID;
+      commissionMessage = { kind: "waiting", message: `Device added as node ${nodeID}. Confirming its name…` };
+      renderAll();
+      status.focus();
+    } });
     commissionOperation = operation;
     commissionMessage = { kind: "waiting", message: "Waiting for Matter Server to add the device. This can take up to five minutes." };
     clearCode();
@@ -333,6 +400,7 @@ async function start() {
     if (attempt !== commissionAttempt) return;
     commissionPending = false;
     commissionMessage = outcome;
+    if (outcome.kind === "success") nameInput.value = "";
     renderAll();
     status.focus();
     await refresh();

@@ -1,5 +1,13 @@
 # Discovery and commissioning
 
+The browser and CLI can request an optional device name. After commissioning
+returns the new node ID, matterctl writes the name as the node's Matter
+`NodeLabel` and confirms it with a fresh read. If naming fails, the device
+remains commissioned and the caller sees its node ID to retry `device label
+set`. The CLI prompts for a name on a terminal in text mode, or accepts
+`--name <name>` in any mode. JSON mode does not prompt. The browser form has an
+optional name field. Names must follow the 32 UTF-8 byte Matter label limit.
+
 Both commands call the running matterctl HTTP service. They require its current
 Matter Server session to have synchronized inventory. `--server.url` and
 `--output text|json` work as on other device commands.

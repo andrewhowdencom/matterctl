@@ -1,9 +1,12 @@
 package cli
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"strings"
 	"text/tabwriter"
 	"time"
 
@@ -55,7 +58,7 @@ func optionalNumber[T int | uint16](value *T) string {
 }
 
 func commissionCommand(config *viper.Viper) *cobra.Command {
-	var code string
+	var code, name string
 	var stdin, networkOnly bool
 	var timeout time.Duration
 	command := &cobra.Command{
@@ -88,6 +91,17 @@ func commissionCommand(config *viper.Viper) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if !cmd.Flags().Changed("name") && format != "json" {
+				name, err = promptDeviceName()
+				if err != nil {
+					return err
+				}
+			}
+			if name != "" {
+				if err := (api.LabelRequest{Target: "pending", Label: name}).Validate(); err != nil {
+					return err
+				}
+			}
 			if _, err := fmt.Fprintf(cmd.ErrOrStderr(), "Waiting for network-only commissioning (up to %s)...\n", timeout); err != nil {
 				return err
 			}
@@ -98,6 +112,16 @@ func commissionCommand(config *viper.Viper) *cobra.Command {
 			if _, err := fmt.Fprintln(cmd.ErrOrStderr(), "Commissioning completed."); err != nil {
 				return err
 			}
+			if name != "" {
+				label, labelErr := service.SetLabelAfterCommission(cmd.Context(), api.LabelRequest{Target: string(device.NodeID), Label: name})
+				if labelErr != nil {
+					if _, err := fmt.Fprintf(cmd.ErrOrStderr(), "Device added as node %s, but its name was not confirmed: %v. Set it later with device label set %s %q.\n", device.NodeID, labelErr, device.NodeID, name); err != nil {
+						return err
+					}
+				} else {
+					device.Label = label.Label
+				}
+			}
 			if format == "json" {
 				return printJSON(cmd.OutOrStdout(), device)
 			}
@@ -106,9 +130,26 @@ func commissionCommand(config *viper.Viper) *cobra.Command {
 	}
 	// Codes deliberately bypass Viper: no configuration or environment storage.
 	command.Flags().StringVar(&code, "code", "", "Fresh manual sharing code or MT: QR payload (prefer --code-stdin)")
+	command.Flags().StringVar(&name, "name", "", "Matter device name (prompt on a terminal if omitted; empty skips naming)")
 	command.Flags().BoolVar(&stdin, "code-stdin", false, "Read the sharing code from standard input, ending at EOF")
 	command.Flags().BoolVar(&networkOnly, "network-only", true, "Commission over the existing IP network; must remain true")
 	command.Flags().DurationVar(&timeout, "timeout", api.CommissionTimeout, "Overall wait for commissioning (1s to 10m)")
 	command.MarkFlagsMutuallyExclusive("code", "code-stdin")
 	return command
+}
+
+func promptDeviceName() (string, error) {
+	terminal, err := os.OpenFile("/dev/tty", os.O_RDWR, 0)
+	if err != nil {
+		return "", nil // Noninteractive callers can use --name.
+	}
+	defer func() { _ = terminal.Close() }()
+	if _, err := fmt.Fprint(terminal, "Device name (optional, Enter to skip): "); err != nil {
+		return "", err
+	}
+	name, err := bufio.NewReader(terminal).ReadString('\n')
+	if err != nil && !errors.Is(err, io.EOF) {
+		return "", err
+	}
+	return strings.TrimSuffix(strings.TrimSuffix(name, "\n"), "\r"), nil
 }

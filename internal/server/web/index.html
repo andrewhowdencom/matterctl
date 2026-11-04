@@ -47,6 +47,11 @@
             <button id="commission-reveal" class="text-button" type="button" aria-pressed="false">Show</button>
           </div>
           <p class="field-help">Use an 11- or 21-digit manual code, or paste an MT: QR payload.</p>
+          <label for="commission-name">Device name <span class="field-optional">(optional)</span></label>
+          <div class="commission-input-row">
+            <input id="commission-name" name="name" type="text" autocomplete="off" maxlength="32" placeholder="e.g. Den Light">
+          </div>
+          <p class="field-help">After the device is added, matterctl writes this name as its Matter label. Some devices may reject the write.</p>
           <div class="commission-actions">
             <button id="commission-submit" class="primary-button" type="submit">Add device</button>
             <button id="commission-stop" class="text-button" type="button" hidden>Stop waiting</button>
