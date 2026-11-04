@@ -2,12 +2,72 @@ package automation
 
 import (
 	"encoding/json"
+	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/andrewhowdencom/matterctl/internal/api"
 )
+
+func TestTwoButtonBilresaRoomBindings(t *testing.T) {
+	source, err := os.ReadFile("../../examples/bilresa-two-button-lights.star")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source = append(source, []byte("\nbind_room(\"11\", 3, 4, \"21\", 1)\n")...)
+	engine, err := Load(t.Context(), "rooms.star", source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if engine.RuleCount() != 8 {
+		t.Fatalf("registered %d rules, want 8", engine.RuleCount())
+	}
+	inventory := api.Inventory{Ready: true, Devices: []api.Device{
+		{NodeID: "10", Label: "ROOM_1_BILRESA", Endpoints: []api.Endpoint{{ID: 1}, {ID: 2}}},
+		{NodeID: "20", Label: "ROOM_1_LIGHT", Endpoints: []api.Endpoint{{ID: 1}}},
+		{NodeID: "11", Endpoints: []api.Endpoint{{ID: 3}, {ID: 4}}},
+		{NodeID: "21", Endpoints: []api.Endpoint{{ID: 1}}},
+	}}
+	if _, err := engine.Feed(t.Context(), sampleEvent("inventory", "", inventory)); err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		name     string
+		node     api.NodeID
+		endpoint uint16
+		eventID  uint32
+		target   api.NodeID
+		kinds    []string
+		values   []any
+	}{
+		{"on click", "10", 1, 3, "20", []string{"power"}, []any{"on"}},
+		{"off click", "10", 2, 3, "20", []string{"power"}, []any{"off"}},
+		{"on hold", "10", 1, 2, "20", []string{"power", "brightness", "colour_temperature"}, []any{"on", int64(100), int64(5000)}},
+		{"off hold", "10", 2, 2, "20", []string{"power", "brightness", "warmest_colour_temperature"}, []any{"on", int64(1), nil}},
+		{"second room", "11", 4, 3, "21", []string{"power"}, []any{"off"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			event := sampleEvent("node_event", test.node, struct {
+				EndpointID uint16 `json:"endpoint_id"`
+				ClusterID  uint32 `json:"cluster_id"`
+				EventID    uint32 `json:"event_id"`
+			}{test.endpoint, 59, test.eventID})
+			firings, err := engine.Feed(t.Context(), event)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(firings) != 1 || len(firings[0].Actions) != len(test.kinds) {
+				t.Fatalf("firings = %+v", firings)
+			}
+			for i, action := range firings[0].Actions {
+				if action.Kind != test.kinds[i] || action.Value != test.values[i] || action.NodeID != test.target {
+					t.Fatalf("action %d = %+v", i, action)
+				}
+			}
+		})
+	}
+}
 
 const exampleRules = `
 den = device("Den Light", endpoint=1)

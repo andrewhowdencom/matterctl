@@ -34,21 +34,22 @@ func Load(ctx context.Context, filename string, source []byte) (*Engine, error) 
 	}
 	e := &Engine{devices: make(map[api.NodeID]api.Device), occupancy: make(map[occupancyKey]bool), registering: true}
 	predeclared := starlark.StringDict{
-		"device":             starlark.NewBuiltin("device", e.device),
-		"occupied":           starlark.NewBuiltin("occupied", triggerBuiltin("occupancy.enter")),
-		"short_press":        starlark.NewBuiltin("short_press", triggerBuiltin("button.short_press")),
-		"short_release":      starlark.NewBuiltin("short_release", triggerBuiltin("button.short_press")),
-		"single_press":       starlark.NewBuiltin("single_press", triggerBuiltin("button.single_press")),
-		"double_press":       starlark.NewBuiltin("double_press", triggerBuiltin("button.double_press")),
-		"long_press":         starlark.NewBuiltin("long_press", triggerBuiltin("button.long_press")),
-		"wheel":              starlark.NewBuiltin("wheel", triggerBuiltin("wheel.turn")),
-		"wheel_step":         starlark.NewBuiltin("wheel_step", triggerBuiltin("wheel.step")),
-		"on":                 starlark.NewBuiltin("on", e.on),
-		"power":              starlark.NewBuiltin("power", actionBuiltin("power")),
-		"toggle":             starlark.NewBuiltin("toggle", actionBuiltin("toggle")),
-		"brightness":         starlark.NewBuiltin("brightness", actionBuiltin("brightness")),
-		"adjust_brightness":  starlark.NewBuiltin("adjust_brightness", actionBuiltin("adjust_brightness")),
-		"colour_temperature": starlark.NewBuiltin("colour_temperature", actionBuiltin("colour_temperature")),
+		"device":                     starlark.NewBuiltin("device", e.device),
+		"occupied":                   starlark.NewBuiltin("occupied", triggerBuiltin("occupancy.enter")),
+		"short_press":                starlark.NewBuiltin("short_press", triggerBuiltin("button.short_press")),
+		"short_release":              starlark.NewBuiltin("short_release", triggerBuiltin("button.short_press")),
+		"single_press":               starlark.NewBuiltin("single_press", triggerBuiltin("button.single_press")),
+		"double_press":               starlark.NewBuiltin("double_press", triggerBuiltin("button.double_press")),
+		"long_press":                 starlark.NewBuiltin("long_press", triggerBuiltin("button.long_press")),
+		"wheel":                      starlark.NewBuiltin("wheel", triggerBuiltin("wheel.turn")),
+		"wheel_step":                 starlark.NewBuiltin("wheel_step", triggerBuiltin("wheel.step")),
+		"on":                         starlark.NewBuiltin("on", e.on),
+		"power":                      starlark.NewBuiltin("power", actionBuiltin("power")),
+		"toggle":                     starlark.NewBuiltin("toggle", actionBuiltin("toggle")),
+		"brightness":                 starlark.NewBuiltin("brightness", actionBuiltin("brightness")),
+		"adjust_brightness":          starlark.NewBuiltin("adjust_brightness", actionBuiltin("adjust_brightness")),
+		"colour_temperature":         starlark.NewBuiltin("colour_temperature", actionBuiltin("colour_temperature")),
+		"warmest_colour_temperature": starlark.NewBuiltin("warmest_colour_temperature", actionBuiltin("warmest_colour_temperature")),
 	}
 	thread := &starlark.Thread{Name: "automation registration"}
 	thread.SetMaxExecutionSteps(100_000)
@@ -135,7 +136,7 @@ func (e *Engine) on(_ *starlark.Thread, fn *starlark.Builtin, args starlark.Tupl
 func actionBuiltin(kind string) func(*starlark.Thread, *starlark.Builtin, starlark.Tuple, []starlark.Tuple) (starlark.Value, error) {
 	return func(_ *starlark.Thread, fn *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 		want := 2
-		if kind == "toggle" {
+		if kind == "toggle" || kind == "warmest_colour_temperature" {
 			want = 1
 		}
 		if len(kwargs) != 0 || len(args) != want {
@@ -148,7 +149,7 @@ func actionBuiltin(kind string) func(*starlark.Thread, *starlark.Builtin, starla
 		if !ok || ref.endpoint == 0 {
 			return nil, fmt.Errorf("%s requires device() with an endpoint", fn.Name())
 		}
-		if kind == "toggle" {
+		if kind == "toggle" || kind == "warmest_colour_temperature" {
 			return &actionValue{kind: kind, device: ref}, nil
 		}
 		if kind == "power" {

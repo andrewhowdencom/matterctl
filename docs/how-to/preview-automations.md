@@ -24,6 +24,36 @@ service. The container reads the files at `/config/matterctl/automations`.
 program, run `./bin/matterctl automation check` and `sudo systemctl restart
 matterctl.service`. To remove the example, delete its saved file and restart.
 
+For the separate two button BILRESA, copy
+[`bilresa-two-button-lights.star`](../../examples/bilresa-two-button-lights.star)
+to the automation directory after replacing the room placeholders. Each
+`bind_room(button_selector, on_endpoint, off_endpoint, light_selector,
+light_endpoint)` call connects one switch to one light. Selectors may be exact
+Matter labels or node IDs, and additional calls can connect more rooms. Inspect
+the two button switch and observe its events to identify which endpoint is On
+and which is Off; do not use the scroll wheel example's endpoints. A short
+release powers the light on or off. Holding On powers it on at 100% and 5000 K.
+Holding Off powers it on at 1% and the light's advertised warmest colour
+temperature. The warmest action reads the light's physical maximum mired value
+when triggered. If the light does not support 5000 K or does not advertise its
+warm limit, that temperature action reports an error in the service log.
+
+To configure it on the installed host, first run `./bin/matterctl device list`
+to find node IDs and light endpoints. Use `./bin/matterctl event watch` while
+pressing each button to find its Switch event endpoint. Then:
+
+```sh
+automation_dir="${XDG_CONFIG_HOME:-$HOME/.config}/matterctl/automations"
+mkdir -p "$automation_dir"
+cp examples/bilresa-two-button-lights.star "$automation_dir/"
+${EDITOR:-vi} "$automation_dir/bilresa-two-button-lights.star"
+task install
+```
+
+Replace `ROOM_1_BILRESA`, `ROOM_1_LIGHT`, and the sample endpoint numbers in
+the saved file before `task install`. Add one `bind_room(...)` call per room.
+`task install` validates the saved rules, rebuilds the service, and restarts it.
+
 The `automation check`, `replay`, and `watch` commands inspect proposed actions
 without sending commands. Build a local CLI and check or preview a file:
 
@@ -84,7 +114,8 @@ Handlers return a list or tuple of planned actions. A handler can call a
 function that builds actions for a reusable device pair. Available actions are
 `power(light, "on"|"off")`, `toggle(light)`, `brightness(light, percent)`,
 `adjust_brightness(light, percentage_points)`, and
-`colour_temperature(light, kelvin)`. Brightness is 1–100 percent; use
+`colour_temperature(light, kelvin)`, plus
+`warmest_colour_temperature(light)`. Brightness is 1–100 percent; use
 `power(light, "off")` to turn a light off. Each target needs `device(...,
 endpoint=...)`. The list order expresses the intended action order, though this
 is not a transaction: if an action fails, later actions in that rule are
