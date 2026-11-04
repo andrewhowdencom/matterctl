@@ -55,6 +55,8 @@ func TestExecuteAutomationUsesAdvertisedCommandsAndFreshReads(t *testing.T) {
 					value = level
 				case "1/768/7":
 					value = mireds
+				case "1/768/16396":
+					value = 454
 				default:
 					t.Errorf("unexpected read path %s", args.AttributePath)
 					return
@@ -115,6 +117,7 @@ func TestExecuteAutomationUsesAdvertisedCommandsAndFreshReads(t *testing.T) {
 		{Kind: "brightness", NodeID: "1", Endpoint: 1, Value: int64(50)},
 		{Kind: "adjust_brightness", NodeID: "1", Endpoint: 1, Value: int64(10)},
 		{Kind: "colour_temperature", NodeID: "1", Endpoint: 1, Value: int64(5000)},
+		{Kind: "warmest_colour_temperature", NodeID: "1", Endpoint: 1},
 	} {
 		if err := c.Execute(t.Context(), action); err != nil {
 			t.Fatalf("execute %s: %v", action.Kind, err)
@@ -122,7 +125,7 @@ func TestExecuteAutomationUsesAdvertisedCommandsAndFreshReads(t *testing.T) {
 	}
 	mu.Lock()
 	defer mu.Unlock()
-	if len(commands) != 4 || commands[0].cluster != 6 || commands[0].name != "toggle" || commands[1].value != 127 || commands[2].value != 152 || commands[3].cluster != 768 || commands[3].value != 200 {
+	if len(commands) != 5 || commands[0].cluster != 6 || commands[0].name != "toggle" || commands[1].value != 127 || commands[2].value != 152 || commands[3].cluster != 768 || commands[3].value != 200 || commands[4].value != 454 {
 		t.Fatalf("unexpected Matter commands: %+v", commands)
 	}
 }

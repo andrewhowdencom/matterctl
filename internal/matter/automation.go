@@ -30,7 +30,7 @@ func (c *Client) Execute(ctx context.Context, action automation.Action) error {
 	case "toggle":
 		_, err := c.Power(ctx, api.PowerRequest{Target: string(action.NodeID), Endpoint: &endpoint, Action: "toggle"})
 		return err
-	case "brightness", "adjust_brightness", "colour_temperature":
+	case "brightness", "adjust_brightness", "colour_temperature", "warmest_colour_temperature":
 		return c.executeLighting(ctx, action)
 	default:
 		return fmt.Errorf("unsupported automation action %q", action.Kind)
@@ -39,7 +39,7 @@ func (c *Client) Execute(ctx context.Context, action automation.Action) error {
 
 func (c *Client) executeLighting(ctx context.Context, action automation.Action) error {
 	value, ok := action.Value.(int64)
-	if !ok || action.NodeID == "" || action.Endpoint == 0 {
+	if (!ok && action.Kind != "warmest_colour_temperature") || action.NodeID == "" || action.Endpoint == 0 {
 		return errors.New("invalid automation lighting action")
 	}
 	if !c.controlling.CompareAndSwap(false, true) {
@@ -116,12 +116,24 @@ func (c *Client) executeLighting(ctx context.Context, action automation.Action) 
 			OptionsMask     int   `json:"optionsMask"`
 			OptionsOverride int   `json:"optionsOverride"`
 		}{expected, 0, 0, 0}
-	case "colour_temperature":
-		if value < 1000 || value > 10000 {
-			return errors.New("colour temperature is out of range")
-		}
+	case "colour_temperature", "warmest_colour_temperature":
 		clusterID, commandID, attributeID, commandName = clusterColorControl, commandMoveToColorTemperature, attributeColorTemperature, "moveToColorTemperature"
-		expected = (1_000_000 + value/2) / value
+		if action.Kind == "warmest_colour_temperature" {
+			raw, err := c.readAutomationAttribute(ctx, session, action.NodeID, action.Endpoint, clusterColorControl, attributeColorTempPhysicalMax)
+			if err != nil {
+				return fmt.Errorf("read warmest colour temperature: %w", err)
+			}
+			var limit uint16
+			if json.Unmarshal(raw, &limit) != nil || limit == 0 {
+				return errors.New("warmest colour temperature is unavailable")
+			}
+			expected = int64(limit)
+		} else {
+			if value < 1000 || value > 10000 {
+				return errors.New("colour temperature is out of range")
+			}
+			expected = (1_000_000 + value/2) / value
+		}
 		for _, bound := range []struct {
 			attribute uint32
 			outside   bool
