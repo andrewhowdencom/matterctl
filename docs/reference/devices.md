@@ -4,7 +4,7 @@
 
 ```text
 matterctl device list [--output text|json]
-matterctl device inspect <target> [--output text|json]
+matterctl device inspect <target> [--verbose] [--output text|json]
 matterctl event watch [--device <target>] [--output text|json]
 ```
 
@@ -23,6 +23,9 @@ user-set label. Inspection includes availability,
 the last node update time, labels, vendor/product names, and endpoint metadata.
 Times indicate when matterctl applied updates; they are not fresh reads of every
 attribute. Availability is the upstream's last reported device availability.
+The default inspection text groups state, power actions, and cluster roles by
+endpoint. `--verbose` adds per-cluster commands, attributes, events, and features.
+The flag has no effect on JSON output.
 
 An empty ready inventory is successful. If synchronization is incomplete or the
 upstream has disconnected, listing prints the stale diagnostic snapshot and

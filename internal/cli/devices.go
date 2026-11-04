@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -47,9 +48,11 @@ func deviceCommand(config *viper.Viper) *cobra.Command {
 			}
 			return requestErr
 		},
-	}, &cobra.Command{
+	})
+	var verbose bool
+	inspect := &cobra.Command{
 		Use: "inspect <target>", Short: "Inspect a node ID or an unambiguous Matter label", Args: cobra.ExactArgs(1),
-		Example: "  matterctl device inspect 12\n  matterctl device inspect \"Couch lamp\" --output json",
+		Example: "  matterctl device inspect 12\n  matterctl device inspect \"Couch lamp\" --verbose\n  matterctl device inspect \"Couch lamp\" --output json",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			service, format, err := configuredClient(config)
 			if err != nil {
@@ -62,9 +65,11 @@ func deviceCommand(config *viper.Viper) *cobra.Command {
 			if format == "json" {
 				return printJSON(cmd.OutOrStdout(), device)
 			}
-			return printDevice(cmd.OutOrStdout(), device)
+			return printDevice(cmd.OutOrStdout(), device, verbose)
 		},
-	})
+	}
+	inspect.Flags().BoolVarP(&verbose, "verbose", "v", false, "Show per-cluster commands, attributes, events, and features in text output")
+	command.AddCommand(inspect)
 	return command
 }
 
@@ -118,12 +123,43 @@ func printInventory(output io.Writer, inventory api.Inventory) error {
 	return w.Flush()
 }
 
-func printDevice(output io.Writer, device api.Device) error {
-	if _, err := fmt.Fprintf(output, "Node: %s\nLabel: %q\nVendor: %q\nProduct: %q\nAvailable: %t\nBridge: %t\nObserved at: %s\n", device.NodeID, device.Label, device.Vendor, device.Product, device.Available, device.IsBridge, device.ObservedAt.Format(time.RFC3339)); err != nil {
+func printDevice(output io.Writer, device api.Device, verbose bool) error {
+	availability := "unavailable"
+	if device.Available {
+		availability = "available"
+	}
+	name := ""
+	if device.Label != "" {
+		name = " " + fmt.Sprintf("%q", device.Label)
+	}
+	if _, err := fmt.Fprintf(output, "Node %s%s (%s)\n", device.NodeID, name, availability); err != nil {
+		return err
+	}
+	if device.Vendor != "" || device.Product != "" {
+		if _, err := fmt.Fprintf(output, "  Product: %s\n", strings.Join(nonempty(device.Vendor, device.Product), " / ")); err != nil {
+			return err
+		}
+	}
+	if device.IsBridge {
+		if _, err := fmt.Fprintln(output, "  Bridge: yes"); err != nil {
+			return err
+		}
+	}
+	if !device.ObservedAt.IsZero() {
+		if _, err := fmt.Fprintf(output, "  Observed: %s\n", device.ObservedAt.Format(time.RFC3339)); err != nil {
+			return err
+		}
+	}
+	if len(device.Endpoints) == 0 {
+		_, err := fmt.Fprintln(output, "  No endpoints observed.")
 		return err
 	}
 	for _, endpoint := range device.Endpoints {
-		if _, err := fmt.Fprintf(output, "\nEndpoint %d %q (descriptor complete: %t)\n", endpoint.ID, endpoint.Label, endpoint.DescriptorComplete); err != nil {
+		label := ""
+		if endpoint.Label != "" {
+			label = " " + fmt.Sprintf("%q", endpoint.Label)
+		}
+		if _, err := fmt.Fprintf(output, "\nEndpoint %d%s — %s\n", endpoint.ID, label, deviceTypeSummary(endpoint.DeviceTypes)); err != nil {
 			return err
 		}
 		if endpoint.ParentID != nil {
@@ -131,63 +167,173 @@ func printDevice(output io.Writer, device api.Device) error {
 				return err
 			}
 		}
-		if _, err := fmt.Fprintf(output, "  Device types: %s\n  Capabilities: %s\n", deviceTypeDetails(endpoint.DeviceTypes), strings.Join(endpoint.Capabilities, ", ")); err != nil {
+		if !endpoint.DescriptorComplete {
+			if _, err := fmt.Fprintln(output, "  Descriptor: incomplete"); err != nil {
+				return err
+			}
+		}
+		states := endpointStateSummary(endpoint)
+		if _, err := fmt.Fprintf(output, "  State: %s\n  Power actions: %s\n  Serves: %s\n  Uses: %s\n", states, powerActionSummary(endpoint), clusterSummary(endpoint.ServerClusters, endpoint.DescriptorComplete), clusterSummary(endpoint.ClientClusters, endpoint.DescriptorComplete)); err != nil {
 			return err
 		}
-		if len(endpoint.States) != 0 {
-			for _, state := range endpoint.States {
-				if _, err := fmt.Fprintf(output, "  %s: %s\n", state.Name, state.Text); err != nil {
-					return err
-				}
+		if verbose {
+			if _, err := fmt.Fprintf(output, "  Device types: %s\n", deviceTypeDetails(endpoint.DeviceTypes)); err != nil {
+				return err
 			}
-		} else {
-			// Older servers do not provide the generic state projection.
-			if endpoint.Power != nil {
-				if _, err := fmt.Fprintf(output, "  Power: %t\n", *endpoint.Power); err != nil {
-					return err
-				}
+			if err := printClusterDetails(output, "Server", endpoint.ServerClusters); err != nil {
+				return err
 			}
-			if endpoint.Level != nil {
-				if _, err := fmt.Fprintf(output, "  Level: %d\n", *endpoint.Level); err != nil {
-					return err
-				}
-			}
-			if endpoint.SwitchPosition != nil {
-				if _, err := fmt.Fprintf(output, "  Switch position: %d\n", *endpoint.SwitchPosition); err != nil {
-					return err
-				}
-			}
-		}
-		for _, role := range []struct {
-			name     string
-			clusters []api.Cluster
-		}{{"Server", endpoint.ServerClusters}, {"Client", endpoint.ClientClusters}} {
-			for _, cluster := range role.clusters {
-				if _, err := fmt.Fprintf(output, "  %s cluster %d %s\n", role.name, cluster.ID, cluster.Name); err != nil {
-					return err
-				}
-				if role.name == "Server" {
-					commands := "unknown"
-					if cluster.AcceptedCommands != nil {
-						encoded, err := json.Marshal(cluster.AcceptedCommands)
-						if err != nil {
-							return err
-						}
-						commands = string(encoded)
-					}
-					if _, err := fmt.Fprintf(output, "    Accepted commands: %s\n    Attributes: %s\n    Events: %s\n", commands, namedIDs(cluster.Attributes, cluster.AttributeNames), namedIDs(cluster.Events, cluster.EventNames)); err != nil {
-						return err
-					}
-					if cluster.FeatureMap != nil {
-						if _, err := fmt.Fprintf(output, "    Features: %s\n", cluster.FeatureMap); err != nil {
-							return err
-						}
-					}
-				}
+			if err := printClusterDetails(output, "Client", endpoint.ClientClusters); err != nil {
+				return err
 			}
 		}
 	}
 	return nil
+}
+
+func nonempty(values ...string) []string {
+	items := make([]string, 0, len(values))
+	for _, value := range values {
+		if value != "" {
+			items = append(items, value)
+		}
+	}
+	return items
+}
+
+func powerActionSummary(endpoint api.Endpoint) string {
+	if len(endpoint.Capabilities) != 0 {
+		items := make([]string, 0, len(endpoint.Capabilities))
+		for _, capability := range endpoint.Capabilities {
+			items = append(items, strings.TrimPrefix(capability, "power."))
+		}
+		return strings.Join(items, ", ")
+	}
+	if !endpoint.DescriptorComplete {
+		return "unknown"
+	}
+	for _, cluster := range endpoint.ServerClusters {
+		if cluster.ID == 6 && cluster.AcceptedCommands == nil {
+			return "unknown"
+		}
+	}
+	return "none advertised"
+}
+
+func endpointStateSummary(endpoint api.Endpoint) string {
+	states := make([]string, 0, len(endpoint.States))
+	for _, state := range endpoint.States {
+		states = append(states, state.Name+"="+state.Text)
+	}
+	if len(states) == 0 { // Older servers may only supply the selected state fields.
+		if endpoint.Power != nil {
+			power := "off"
+			if *endpoint.Power {
+				power = "on"
+			}
+			states = append(states, "power="+power)
+		}
+		if endpoint.Level != nil {
+			states = append(states, fmt.Sprintf("level=%d", *endpoint.Level))
+		}
+		if endpoint.SwitchPosition != nil {
+			states = append(states, fmt.Sprintf("switch_position=%d", *endpoint.SwitchPosition))
+		}
+	}
+	if len(states) == 0 {
+		return "unknown"
+	}
+	return strings.Join(states, ", ")
+}
+
+func clusterSummary(clusters []api.Cluster, complete bool) string {
+	if len(clusters) == 0 {
+		if !complete {
+			return "unknown"
+		}
+		return "none advertised"
+	}
+	items := make([]string, 0, len(clusters))
+	for _, cluster := range clusters {
+		if cluster.Name != "" {
+			items = append(items, cluster.Name)
+		} else {
+			items = append(items, fmt.Sprint(cluster.ID))
+		}
+	}
+	return strings.Join(items, ", ")
+}
+
+func clusterNameAndID(cluster api.Cluster) string {
+	if cluster.Name == "" {
+		return fmt.Sprint(cluster.ID)
+	}
+	return fmt.Sprintf("%s (%d)", cluster.Name, cluster.ID)
+}
+
+func printClusterDetails(output io.Writer, role string, clusters []api.Cluster) error {
+	if len(clusters) == 0 {
+		return nil
+	}
+	if _, err := fmt.Fprintf(output, "  %s clusters:\n", role); err != nil {
+		return err
+	}
+	for _, cluster := range clusters {
+		if _, err := fmt.Fprintf(output, "    %s\n", clusterNameAndID(cluster)); err != nil {
+			return err
+		}
+		if role == "Client" {
+			continue
+		}
+		commands := "unknown"
+		if cluster.AcceptedCommands != nil {
+			commands = "none"
+			if len(cluster.AcceptedCommands) != 0 {
+				items := make([]string, 0, len(cluster.AcceptedCommands))
+				for _, command := range cluster.AcceptedCommands {
+					if command.Name == "" {
+						items = append(items, fmt.Sprint(command.ID))
+					} else {
+						items = append(items, fmt.Sprintf("%s (%d)", command.Name, command.ID))
+					}
+				}
+				commands = strings.Join(items, ", ")
+			}
+		}
+		if _, err := fmt.Fprintf(output, "      Commands: %s\n      Attributes: %s\n      Events: %s\n", commands, namedIDs(cluster.Attributes, cluster.AttributeNames), namedIDs(cluster.Events, cluster.EventNames)); err != nil {
+			return err
+		}
+		if cluster.FeatureMap != nil {
+			if _, err := fmt.Fprintf(output, "      Features: %s\n", featureSummary(cluster.FeatureMap)); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func featureSummary(raw json.RawMessage) string {
+	var bits uint32
+	if json.Unmarshal(raw, &bits) == nil {
+		return fmt.Sprintf("0x%X", bits)
+	}
+	var features map[string]bool
+	if json.Unmarshal(raw, &features) == nil {
+		keys := make([]string, 0, len(features))
+		for key := range features {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		items := make([]string, 0, len(keys))
+		for _, key := range keys {
+			items = append(items, fmt.Sprintf("%s=%t", key, features[key]))
+		}
+		if len(items) == 0 {
+			return "none"
+		}
+		return strings.Join(items, ", ")
+	}
+	return "unknown"
 }
 
 func namedIDs(ids []uint32, names map[uint32]string) string {
@@ -199,7 +345,10 @@ func namedIDs(ids []uint32, names map[uint32]string) string {
 			items = append(items, fmt.Sprint(id))
 		}
 	}
-	return "[" + strings.Join(items, ", ") + "]"
+	if len(items) == 0 {
+		return "none"
+	}
+	return strings.Join(items, ", ")
 }
 
 func deviceTypeSummary(types []api.DeviceType) string {
