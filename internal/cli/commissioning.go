@@ -125,7 +125,7 @@ func commissionCommand(config *viper.Viper) *cobra.Command {
 			if format == "json" {
 				return printJSON(cmd.OutOrStdout(), device)
 			}
-			return printDevice(cmd.OutOrStdout(), device)
+			return printDevice(cmd.OutOrStdout(), device, false)
 		},
 	}
 	// Codes deliberately bypass Viper: no configuration or environment storage.

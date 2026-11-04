@@ -31,7 +31,7 @@ func TestDeviceCommandsUseAPIAndPreserveLargeIDs(t *testing.T) {
 		}
 	}))
 	defer server.Close()
-	for _, args := range [][]string{{"device", "list"}, {"device", "list", "--output", "json"}, {"device", "inspect", "Couch lamp"}, {"device", "inspect", "Couch lamp", "--output", "json"}} {
+	for _, args := range [][]string{{"device", "list"}, {"device", "list", "--output", "json"}, {"device", "inspect", "Couch lamp"}, {"device", "inspect", "Couch lamp", "--verbose"}, {"device", "inspect", "Couch lamp", "--output", "json"}} {
 		command, err := NewCommand()
 		if err != nil {
 			t.Fatal(err)
@@ -48,7 +48,7 @@ func TestDeviceCommandsUseAPIAndPreserveLargeIDs(t *testing.T) {
 		if args[len(args)-1] == "json" && !json.Valid(output.Bytes()) {
 			t.Fatalf("invalid JSON: %s", &output)
 		}
-		if len(args) >= 2 && args[1] == "inspect" && args[len(args)-1] != "json" && (!strings.Contains(output.String(), "0 (OnOff)") || !strings.Contains(output.String(), "0 (StartUp)")) {
+		if len(args) >= 2 && args[1] == "inspect" && args[len(args)-1] == "--verbose" && (!strings.Contains(output.String(), "0 (OnOff)") || !strings.Contains(output.String(), "0 (StartUp)")) {
 			t.Fatalf("standard names missing from inspection: %s", &output)
 		}
 	}
@@ -159,11 +159,51 @@ func TestEventWatchTextShowsCompactStateChanges(t *testing.T) {
 func TestDeviceOutputsShowAdvertisedTypeSeparatelyFromLabel(t *testing.T) {
 	device := api.Device{NodeID: "1", Label: "Den Light", ObservedAt: time.Now(), Endpoints: []api.Endpoint{{ID: 1, DeviceTypes: []api.DeviceType{{ID: 269, Name: "Extended Color Light", Revision: 1}}, States: []api.State{{Name: "temperature", Text: "21.50°C"}}}}}
 	var output bytes.Buffer
-	if err := printDevice(&output, device); err != nil || !strings.Contains(output.String(), "Extended Color Light (269, revision 1)") || !strings.Contains(output.String(), "temperature: 21.50°C") {
+	if err := printDevice(&output, device, false); err != nil || !strings.Contains(output.String(), "Endpoint 1 — Extended Color Light") || !strings.Contains(output.String(), "State: temperature=21.50°C") {
 		t.Fatalf("inspect omitted device type: %v %s", err, &output)
 	}
 	output.Reset()
 	if err := printInventory(&output, api.Inventory{Connection: api.Connection{State: "connected"}, Ready: true, Devices: []api.Device{device}}); err != nil || !strings.Contains(output.String(), "Extended Color Light") || !strings.Contains(output.String(), "DEVICE TYPE") {
 		t.Fatalf("list omitted device type: %v %s", err, &output)
+	}
+}
+
+func TestInspectTextSeparatesOverviewFromClusterDetails(t *testing.T) {
+	observed := time.Date(2026, time.November, 4, 12, 30, 0, 0, time.UTC)
+	device := api.Device{NodeID: "12", Label: "Couch lamp", Vendor: "Govee", Product: "H60A6", Available: true, ObservedAt: observed, Endpoints: []api.Endpoint{{
+		ID: 1, DescriptorComplete: true, DeviceTypes: []api.DeviceType{{ID: 269, Name: "Extended Color Light", Revision: 1}},
+		States: []api.State{{Name: "power", Text: "on"}, {Name: "level", Text: "42"}}, Capabilities: []string{"power.off", "power.on"},
+		ServerClusters: []api.Cluster{
+			{ID: 6, Name: "OnOff", AcceptedCommands: []api.Command{{ID: 0, Name: "Off"}, {ID: 1, Name: "On"}}, Attributes: []uint32{0}, AttributeNames: map[uint32]string{0: "OnOff"}, FeatureMap: json.RawMessage(`{"lighting":true}`)},
+			{ID: 99999, AcceptedCommands: []api.Command{}, Events: []uint32{7}},
+			{ID: 8, Name: "LevelControl"},
+		}, ClientClusters: []api.Cluster{{ID: 59, Name: "Switch"}},
+	}}}
+	var output bytes.Buffer
+	if err := printDevice(&output, device, false); err != nil {
+		t.Fatal(err)
+	}
+	want := "Node 12 \"Couch lamp\" (available)\n  Product: Govee / H60A6\n  Observed: 2026-11-04T12:30:00Z\n\nEndpoint 1 — Extended Color Light\n  State: power=on, level=42\n  Power actions: off, on\n  Serves: OnOff, 99999, LevelControl\n  Uses: Switch\n"
+	if output.String() != want {
+		t.Fatalf("overview = %q, want %q", output.String(), want)
+	}
+	output.Reset()
+	if err := printDevice(&output, device, true); err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{"Device types: Extended Color Light (269, revision 1)", "Commands: Off (0), On (1)", "Attributes: 0 (OnOff)", "Features: lighting=true", "99999\n      Commands: none", "LevelControl (8)\n      Commands: unknown", "Events: 7", "Client clusters:\n    Switch (59)"} {
+		if !strings.Contains(output.String(), expected) {
+			t.Fatalf("verbose output missing %q: %s", expected, &output)
+		}
+	}
+	output.Reset()
+	device.Endpoints[0] = api.Endpoint{ID: 1}
+	if err := printDevice(&output, device, false); err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{"Descriptor: incomplete", "Power actions: unknown", "Serves: unknown", "Uses: unknown"} {
+		if !strings.Contains(output.String(), expected) {
+			t.Fatalf("incomplete descriptor missing %q: %s", expected, &output)
+		}
 	}
 }

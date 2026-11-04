@@ -23,14 +23,20 @@ Inspect a decimal node ID or an unambiguous Matter label:
 ```sh
 matterctl device inspect 12
 matterctl device inspect "Couch lamp"
+matterctl device inspect "Couch lamp" --verbose
 matterctl device inspect "Couch lamp" --output json
 ```
 
-Inspection shows every observed endpoint on the node, its parent when known,
-device types, server and client clusters, standard attribute and event names,
-command metadata, features, and selected state. A light can accept OnOff
-commands on a server cluster; a switch
-with an OnOff client cluster sends commands and does not gain power controls
+The default text view groups each endpoint's device type, selected state, power
+actions, and server/client clusters beneath the node. `--verbose` adds device
+type revisions and per-cluster commands, attributes, events, features, and
+numeric IDs. JSON output contains the full projected device object.
+An incomplete descriptor or missing command metadata is shown as `unknown`;
+an advertised empty list is shown as `none`.
+`Serves` lists server clusters, while `Uses` lists client clusters.
+
+A light can accept OnOff commands on a server cluster; a switch with an OnOff
+client cluster sends commands and does not gain power controls
 merely from that cluster's presence. `accepted_commands: null` means unknown,
 while `[]` means the server advertised no accepted commands.
 
