@@ -7,9 +7,10 @@ Each file registers independent rules; edits take effect after a service
 restart. The configured directory can be changed with
 `--automation.directory` or `MATTERCTL_AUTOMATION_DIRECTORY`.
 
-The BILRESA example uses node 2's endpoint 9 short press to toggle Den Light
+The BILRESA example uses node 2's endpoint 9 short release to toggle Den Light
 and wheel endpoints 7 and 8 to change its brightness by five percentage points
-per reported step. To enable it on the installed host:
+per reported short release. It controls the third LED group. To enable it on the
+installed host:
 
 ```sh
 task automation:example
@@ -56,19 +57,26 @@ The example registers three rules:
 
 ```python
 on(occupied(presence, endpoint=1), daytime)
-on(wheel(bilresa, up=7, down=8),
+on(wheel_step(bilresa, up=7, down=8),
    lambda event: [adjust_brightness(den, event.steps * 5)])
 bind_toggle(bilresa, 9, den)
 ```
 
 `occupied` fires when a reported occupancy state changes from false to true.
 An initial snapshot, including one that is already occupied, sets the baseline
-without firing. `short_press` fires on the Matter Switch ShortRelease event.
-`wheel` uses the Switch MultiPressComplete count: endpoint `up` produces a
-positive `event.steps`, and endpoint `down` produces a negative count. The
-count is switch activations, not degrees of rotation or an absolute brightness
-level. The endpoint mapping and five percentage points per step in the example
-are choices for this particular BILRESA and light. The additional
+without firing. `short_release` fires as soon as the Matter Switch ShortRelease
+event arrives; `short_press` is a compatible alias. It can also fire during a
+double press. `single_press` and `double_press` distinguish final counts of one
+and two using MultiPressComplete, so they wait for the gesture to finish.
+`long_press` fires when the Switch LongPress event reaches the controller.
+`wheel_step` reacts to each ShortRelease on its two direction endpoints, before
+MultiPressComplete. Its `event.steps` is +1 for `up` and -1 for `down`.
+The older `wheel` trigger instead waits for MultiPressComplete and uses its
+reported count. That count is switch activations, not degrees of rotation or
+an absolute brightness level. The endpoint mapping and five percentage points
+per step in the example are choices for this particular BILRESA and light.
+Fast wheel input can still queue light commands because the live runner confirms
+each action before starting the next. The additional
 [`den.star`](../../examples/den.star) example also shows a presence trigger
 and a three-action daytime function.
 

@@ -74,6 +74,50 @@ func TestRulesPreviewPresenceWheelAndButton(t *testing.T) {
 	}
 }
 
+func TestSwitchPrimitivesSeparateImmediateReleaseFromCompletedGesture(t *testing.T) {
+	engine, err := Load(t.Context(), "switch.star", []byte(`
+light = device("Den Light", endpoint=1)
+button = device("BILRESA")
+on(short_release(button, endpoint=9), lambda event: [toggle(light)])
+on(single_press(button, endpoint=9), lambda event: [power(light, "on")])
+on(double_press(button, endpoint=9), lambda event: [power(light, "off")])
+on(long_press(button, endpoint=9), lambda event: [brightness(light, 50)])
+on(wheel_step(button, up=7, down=8),
+   lambda event: [adjust_brightness(light, event.steps * 5)])
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := engine.Feed(t.Context(), sampleInventory(false)); err != nil {
+		t.Fatal(err)
+	}
+	check := func(endpoint uint16, eventID uint32, fields map[string]uint8, wantRule int, wantValue any) {
+		t.Helper()
+		firings, err := engine.Feed(t.Context(), switchEvent(endpoint, eventID, fields))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if wantRule == 0 {
+			if len(firings) != 0 {
+				t.Fatalf("event %d on endpoint %d unexpectedly fired %+v", eventID, endpoint, firings)
+			}
+			return
+		}
+		if len(firings) != 1 || firings[0].Rule != wantRule || len(firings[0].Actions) != 1 || firings[0].Actions[0].Value != wantValue {
+			t.Fatalf("event %d on endpoint %d fired %+v, want rule %d value %v", eventID, endpoint, firings, wantRule, wantValue)
+		}
+	}
+	check(9, 1, nil, 0, nil) // InitialPress does not decide a gesture.
+	check(9, 3, nil, 1, nil) // ShortRelease toggles before the final count.
+	check(9, 6, map[string]uint8{"totalNumberOfPressesCounted": 1}, 2, "on")
+	check(9, 6, map[string]uint8{"totalNumberOfPressesCounted": 2}, 3, "off")
+	check(9, 2, nil, 4, int64(50))
+	check(9, 4, nil, 0, nil) // LongRelease does not also toggle.
+	check(7, 3, nil, 5, int64(5))
+	check(8, 3, nil, 5, int64(-5))
+	check(7, 6, map[string]uint8{"totalNumberOfPressesCounted": 4}, 0, nil)
+}
+
 func TestRuleValidationAndTargetResolution(t *testing.T) {
 	for _, test := range []struct {
 		name, source, want string

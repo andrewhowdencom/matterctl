@@ -101,18 +101,48 @@ func (e *Engine) Feed(ctx context.Context, event api.Event) ([]Firing, error) {
 		}
 		signal := Signal{NodeID: event.NodeID, Endpoint: update.EndpointID, ObservedAt: event.ObservedAt}
 		switch update.EventID {
-		case 3: // Switch ShortRelease; InitialPress and completion are not clicks.
+		case 2: // Switch LongPress fires when the hold threshold is reached.
+			signal.Kind = "button.long_press"
+			return e.fire(ctx, signal)
+		case 3: // Switch ShortRelease fires before MultiPressComplete.
 			signal.Kind = "button.short_press"
+			button, err := e.fire(ctx, signal)
+			if err != nil {
+				return nil, err
+			}
+			signal.Kind, signal.Steps = "wheel.step", 1
+			wheel, err := e.fire(ctx, signal)
+			if err != nil {
+				return nil, err
+			}
+			return append(button, wheel...), nil
 		case 6: // Switch MultiPressComplete carries the whole gesture count.
 			steps := update.Data["totalNumberOfPressesCounted"]
 			if steps == 0 {
 				return nil, nil
 			}
 			signal.Kind, signal.Steps = "wheel.turn", int(steps)
+			wheel, err := e.fire(ctx, signal)
+			if err != nil {
+				return nil, err
+			}
+			switch steps {
+			case 1:
+				signal.Kind = "button.single_press"
+			case 2:
+				signal.Kind = "button.double_press"
+			default:
+				return wheel, nil
+			}
+			signal.Steps = 0
+			button, err := e.fire(ctx, signal)
+			if err != nil {
+				return nil, err
+			}
+			return append(wheel, button...), nil
 		default:
 			return nil, nil
 		}
-		return e.fire(ctx, signal)
 	default:
 		return nil, nil
 	}
@@ -166,7 +196,7 @@ func (e *Engine) applyInventory(inventory api.Inventory) error {
 	for _, rule := range e.rules {
 		t := rule.trigger
 		device := devices[t.device.resolved]
-		if t.kind == "wheel.turn" {
+		if t.kind == "wheel.turn" || t.kind == "wheel.step" {
 			if !hasEndpoint(device, t.up) || !hasEndpoint(device, t.down) {
 				return fmt.Errorf("wheel source %q requires endpoints %d and %d", t.device.selector, t.up, t.down)
 			}
@@ -220,7 +250,7 @@ func (e *Engine) fire(ctx context.Context, signal Signal) ([]Firing, error) {
 			continue
 		}
 		matched := trigger.endpoint == signal.Endpoint
-		if signal.Kind == "wheel.turn" {
+		if signal.Kind == "wheel.turn" || signal.Kind == "wheel.step" {
 			matched = trigger.up == signal.Endpoint || trigger.down == signal.Endpoint
 			if trigger.down == signal.Endpoint {
 				signal.Steps = -positive(signal.Steps)

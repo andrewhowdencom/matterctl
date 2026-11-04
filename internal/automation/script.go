@@ -37,7 +37,12 @@ func Load(ctx context.Context, filename string, source []byte) (*Engine, error) 
 		"device":             starlark.NewBuiltin("device", e.device),
 		"occupied":           starlark.NewBuiltin("occupied", triggerBuiltin("occupancy.enter")),
 		"short_press":        starlark.NewBuiltin("short_press", triggerBuiltin("button.short_press")),
+		"short_release":      starlark.NewBuiltin("short_release", triggerBuiltin("button.short_press")),
+		"single_press":       starlark.NewBuiltin("single_press", triggerBuiltin("button.single_press")),
+		"double_press":       starlark.NewBuiltin("double_press", triggerBuiltin("button.double_press")),
+		"long_press":         starlark.NewBuiltin("long_press", triggerBuiltin("button.long_press")),
 		"wheel":              starlark.NewBuiltin("wheel", triggerBuiltin("wheel.turn")),
+		"wheel_step":         starlark.NewBuiltin("wheel_step", triggerBuiltin("wheel.step")),
 		"on":                 starlark.NewBuiltin("on", e.on),
 		"power":              starlark.NewBuiltin("power", actionBuiltin("power")),
 		"toggle":             starlark.NewBuiltin("toggle", actionBuiltin("toggle")),
@@ -86,7 +91,7 @@ func triggerBuiltin(kind string) func(*starlark.Thread, *starlark.Builtin, starl
 			return nil, fmt.Errorf("%s requires a device() value", fn.Name())
 		}
 		var endpoint, up, down int
-		if kind == "wheel.turn" {
+		if kind == "wheel.turn" || kind == "wheel.step" {
 			if err := starlark.UnpackArgs(fn.Name(), nil, kwargs, "up", &up, "down", &down); err != nil {
 				return nil, err
 			}
