@@ -45,7 +45,7 @@ from the LAN. Port 8080 is already used by another service on the target host.
 ./bin/matterctl server info --output json
 ./bin/matterctl device list
 ./bin/matterctl device discover
-./bin/matterctl device commission --code-stdin --network-only
+./bin/matterctl device commission --code-stdin --network-only --name "Den Light"
 ./bin/matterctl device label set 1 "Den Light"
 ./bin/matterctl device power on "Den Light"
 ./bin/matterctl device power on 1 --endpoint 1

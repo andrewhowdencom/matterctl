@@ -54,6 +54,8 @@ h1 { margin-bottom: 14px; font-size: clamp(42px, 5.8vw, 76px); line-height: 1.04
 .commission-status[hidden] { display: none; }
 .commission-waiting, .commission-uncertain, .commission-unavailable, .commission-busy { border-color: #eddab6; background: #fff8ec; color: #755526; }
 .commission-invalid, .commission-rejected, .commission-forbidden { border-color: #e8c8bd; background: #fff4f0; color: #844b39; }
+.commission-naming { border-color: #eddab6; background: #fff8ec; color: #755526; }
+.field-optional { color: #66766b; font-weight: 400; }
 
 .inventory { padding-bottom: 90px; }
 .section-heading { display: flex; justify-content: space-between; align-items: end; gap: 20px; padding-bottom: 19px; border-bottom: 1px solid #d8dcd3; }

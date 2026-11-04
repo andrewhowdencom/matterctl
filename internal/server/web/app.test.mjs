@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { applyEvent, applyInventory, beginCommission, commissionOutcome, consumeNDJSON, deviceName, deviceType, endpointState, submitCommission, validCommissionCode } from "./app.mjs";
+import { applyEvent, applyInventory, beginCommission, commissionOutcome, consumeNDJSON, deviceName, deviceType, endpointState, submitCommission, validCommissionCode, validDeviceName } from "./app.mjs";
 
 const denLight = {
   node_id: "1",
@@ -71,6 +71,39 @@ test("commission codes accept supported shapes without validating their checksum
   for (const code of ["", "3532533507", "3532533507x", "mt:ABC123", "MT:", "MT:abc", "1".repeat(1025)]) {
     assert.equal(validCommissionCode(code), false, code);
   }
+});
+
+test("optional device names follow Matter label limits", () => {
+  for (const name of ["", "Den Light", "é".repeat(16)]) assert.equal(validDeviceName(name), true, name);
+  for (const name of [" Den Light", "Den Light ", "line\nbreak", "é".repeat(17)]) assert.equal(validDeviceName(name), false, name);
+});
+
+test("commissioning writes a supplied name after the node is known", async () => {
+  const calls = [];
+  let labelAttempts = 0;
+  const fetchImpl = async (path, options) => {
+    calls.push({ path, body: JSON.parse(options.body) });
+    if (path.endsWith("/commission")) return { status: 200, json: async () => ({ node_id: "42", product: "Lamp" }) };
+    if (++labelAttempts === 1) return { status: 404, json: async () => ({ error: "device not found" }) };
+    return { status: 200, json: async () => ({ node_id: "42", label: "Den Light" }) };
+  };
+  const operation = beginCommission("35325335079", { name: "Den Light", fetchImpl });
+  assert.deepEqual(await operation.result, { kind: "success", message: "Den Light was added as node 42." });
+  assert.deepEqual(calls.map((call) => call.path), ["/api/v1/devices/commission", "/api/v1/devices/label", "/api/v1/devices/label"]);
+  assert.deepEqual(calls[1].body, { target: "42", label: "Den Light" });
+});
+
+test("a rejected name reports the commissioned node without retrying", async () => {
+  const calls = [];
+  const fetchImpl = async (path) => {
+    calls.push(path);
+    if (path.endsWith("/commission")) return { status: 200, json: async () => ({ node_id: "42" }) };
+    return { status: 422 };
+  };
+  const outcome = await beginCommission("35325335079", { name: "Den Light", fetchImpl }).result;
+  assert.equal(outcome.kind, "naming");
+  assert.match(outcome.message, /Device added as node 42/);
+  assert.equal(calls.length, 2);
 });
 
 test("commission request posts one code on the same origin without following redirects", async () => {

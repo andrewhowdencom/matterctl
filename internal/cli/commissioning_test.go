@@ -43,12 +43,81 @@ func TestCommissionCLIStdinAndJSONOutput(t *testing.T) {
 	}
 }
 
+func TestCommissionCLIAddsRequestedNameAfterCommissioning(t *testing.T) {
+	var paths []string
+	var labelAttempts int
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.URL.Path)
+		switch r.URL.Path {
+		case api.CommissionPath:
+			_ = json.NewEncoder(w).Encode(api.Device{NodeID: "42", Product: "Lamp"})
+		case api.LabelPath:
+			labelAttempts++
+			if labelAttempts == 1 {
+				w.WriteHeader(http.StatusNotFound)
+				_, _ = w.Write([]byte(`{"error":"device not found"}`))
+				return
+			}
+			var request api.LabelRequest
+			if json.NewDecoder(r.Body).Decode(&request) != nil || request.Target != "42" || request.Label != "Den Light" {
+				t.Error("incorrect label request")
+			}
+			_ = json.NewEncoder(w).Encode(api.LabelResult{NodeID: "42", Label: "Den Light", ConfirmedAt: time.Now().UTC()})
+		default:
+			t.Errorf("unexpected path %s", r.URL.Path)
+		}
+	}))
+	defer s.Close()
+	command, err := NewCommand()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	command.SetOut(&output)
+	command.SetArgs([]string{"device", "commission", "--code", "35325335079", "--name", "Den Light", "--output", "json", "--server.url", s.URL})
+	if err := command.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if len(paths) != 3 || paths[0] != api.CommissionPath || paths[1] != api.LabelPath || paths[2] != api.LabelPath || !strings.Contains(output.String(), `"label": "Den Light"`) {
+		t.Fatalf("unexpected commissioned result: %s, paths: %v", &output, paths)
+	}
+}
+
+func TestCommissionCLIReportsNameFailureWithoutRetryingCommission(t *testing.T) {
+	var commissions int
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == api.CommissionPath {
+			commissions++
+			_ = json.NewEncoder(w).Encode(api.Device{NodeID: "42"})
+			return
+		}
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		_, _ = w.Write([]byte(`{"error":"label rejected"}`))
+	}))
+	defer s.Close()
+	command, err := NewCommand()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var output, progress bytes.Buffer
+	command.SetOut(&output)
+	command.SetErr(&progress)
+	command.SetArgs([]string{"device", "commission", "--code", "35325335079", "--name", "Den Light", "--server.url", s.URL})
+	if err := command.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if commissions != 1 || !strings.Contains(progress.String(), "Device added as node 42, but its name was not confirmed") || !strings.Contains(output.String(), "42") {
+		t.Fatalf("ambiguous result: output=%s progress=%s commissions=%d", &output, &progress, commissions)
+	}
+}
+
 func TestCommissionCLIRejectsInvalidOptionsBeforeRequest(t *testing.T) {
 	t.Setenv("MATTERCTL_CODE", "35325335079")
 	for _, args := range [][]string{
 		{}, {"--code", "invalid-secret"}, {"--code", "35325335079", "--network-only=false"},
 		{"--code", "35325335079", "--timeout", "0s"}, {"--code", "35325335079", "--timeout", "11m"},
 		{"--code", "35325335079", "--code-stdin"}, {"--code-stdin"},
+		{"--code", "35325335079", "--name", " ", "--output", "json"},
 	} {
 		command, err := NewCommand()
 		if err != nil {
