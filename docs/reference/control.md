@@ -75,3 +75,26 @@ An error states whether the command was acknowledged. A timeout or connection
 loss can leave the physical outcome unknown. Inspect the device before deciding
 whether another command is appropriate. Upstream error details are not returned;
 numeric Matter status codes are preserved for device rejections.
+
+## Browser light controls
+
+`POST /api/v1/devices/light` accepts one JSON object with a numeric or exact
+Matter-label `target`, a required nonzero `endpoint`, and one of:
+
+```json
+{"target":"1","endpoint":1,"action":"brightness","value":50}
+{"target":"1","endpoint":1,"action":"temperature","value":4000}
+{"target":"1","endpoint":1,"action":"color","color":"#ff8000"}
+```
+
+Brightness is 1–100 percent; zero is handled by power off. White temperature
+is 1000–10000 K and must also fit the device's reported physical range. Color
+uses an advertised MoveToHueAndSaturation command, or MoveToColor on devices
+that only support XY color. Hue and saturation change without changing the
+current brightness. The service accepts a command only when the endpoint's
+server cluster advertises it. It sends one command and confirms the reported
+attribute with fresh reads. The response contains `node_id`, `endpoint`,
+`action`, and `confirmed_at`. The body is limited to 4096 bytes and rejects
+unknown fields. The request has a 10-second overall deadline; error statuses
+follow the power API table above. A timeout or lost acknowledgement can leave
+the result unknown, and commands are never retried automatically.

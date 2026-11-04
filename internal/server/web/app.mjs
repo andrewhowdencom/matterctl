@@ -1,4 +1,4 @@
-const initialState = () => ({ inventory: null, status: "loading" });
+const initialState = () => ({ inventory: null, status: "loading", lastActions: {} });
 
 export function validCommissionCode(value) {
   const code = value.trim();
@@ -101,9 +101,11 @@ export function beginCommission(code, { name = "", fetchImpl = fetch, timeoutMs 
 }
 
 export function applyInventory(state, inventory) {
+  const nodes = new Set((inventory.devices || []).map((device) => device.node_id));
   return {
     inventory,
     status: inventory.ready && inventory.connection?.state === "connected" ? "ready" : "stale",
+    lastActions: Object.fromEntries(Object.entries(state.lastActions || {}).filter(([key]) => nodes.has(key.split("/")[0]))),
   };
 }
 
@@ -111,8 +113,14 @@ export function applyEvent(state, event) {
   if (event.type === "inventory") return applyInventory(state, event.data);
   if (!state.inventory) return state;
 
+  if (event.type === "node_event" && event.data?.cluster_id === 59 && event.node_id) {
+    const key = `${event.node_id}/${event.data.endpoint_id}`;
+    return { ...state, lastActions: { ...state.lastActions, [key]: { label: switchAction(event.data), at: event.observed_at } } };
+  }
+
   if (event.type === "connection") {
     return {
+	  ...state,
       inventory: { ...state.inventory, connection: event.data.connection, ready: event.data.ready },
       status: "stale",
     };
@@ -129,7 +137,10 @@ export function applyEvent(state, event) {
   } else {
     return state;
   }
-  return { ...state, inventory: { ...state.inventory, devices: updated } };
+  const lastActions = event.type === "node_removed"
+    ? Object.fromEntries(Object.entries(state.lastActions || {}).filter(([key]) => !key.startsWith(`${event.data.node_id}/`)))
+    : state.lastActions;
+  return { ...state, lastActions, inventory: { ...state.inventory, devices: updated } };
 }
 
 function replaceDevice(devices, incoming) {
@@ -147,6 +158,74 @@ export function deviceType(device) {
   const endpoints = (device.endpoints || []).filter((endpoint) => endpoint.id !== 0);
   const type = endpoints.flatMap((endpoint) => endpoint.device_types || []).find((item) => item.name);
   return type?.name || device.product?.trim() || (device.is_bridge ? "Matter bridge" : "Matter device");
+}
+
+export function deviceRole(device) {
+  const endpoints = (device.endpoints || []).filter((endpoint) => endpoint.id !== 0);
+  const types = endpoints.flatMap((endpoint) => endpoint.device_types || []).map((type) => type.name?.toLowerCase() || "");
+  const clusters = endpoints.flatMap((endpoint) => endpoint.server_clusters || []).map((cluster) => cluster.id);
+  if (device.is_bridge) return "bridge";
+  if (clusters.includes(59) || types.some((name) => /switch|button|remote/.test(name))) return "switch";
+  if (clusters.some((id) => [1024, 1026, 1029, 1030].includes(id)) || types.some((name) => /sensor|detector/.test(name))) return "sensor";
+  if (types.some((name) => /outlet|plug/.test(name))) return "outlet";
+  if (types.some((name) => /light|lamp/.test(name)) || clusters.includes(768) || clusters.includes(8)) return "light";
+  return "device";
+}
+
+export function endpointName(endpoint) {
+  if (endpoint.label?.trim()) return endpoint.label.trim();
+  const named = (endpoint.labels || []).find((label) => ["name", "label", "button"].includes(label.name?.toLowerCase()) && label.value?.trim());
+  if (named) return named.value.trim();
+  const tags = endpoint.tags || [];
+  const custom = tags.find((tag) => tag.namespace === 67 && tag.tag === 8 && tag.label?.trim());
+  const column = tags.find((tag) => tag.namespace === 8 && tag.tag === 6 && tag.label?.trim())?.label.trim();
+  const direction = tags.find((tag) => tag.namespace === 67 && (tag.tag === 3 || tag.tag === 4));
+  if (custom && column && custom.label.toLowerCase() === "rotary" && direction) return `Rotary ${column} ${semanticTagName(direction)} · ${endpoint.id}`;
+  if (custom && column && custom.label.toLowerCase() === "button") return `Button ${column} · ${endpoint.id}`;
+  if (custom && !["rotary", "button"].includes(custom.label.toLowerCase())) return `${custom.label[0].toUpperCase()}${custom.label.slice(1)} · ${endpoint.id}`;
+  const semantic = [...tags.filter((tag) => tag.namespace === 67), ...tags.filter((tag) => tag.namespace !== 67)].map(semanticTagName).find((name) => name);
+  if (semantic) return `${semantic} · ${endpoint.id}`;
+  const type = (endpoint.device_types || []).find((item) => item.name && !/^(root node|aggregator)$/i.test(item.name));
+  return type ? `${type.name} · ${endpoint.id}` : `Endpoint ${endpoint.id}`;
+}
+
+export function semanticTagName(tag) {
+  if (tag.namespace === 67) {
+    const names = ["On", "Off", "Toggle", "Up", "Down", "Next", "Previous", "Select"];
+    return tag.tag === 8 ? tag.label?.trim() || "Custom button" : names[tag.tag] || "";
+  }
+  if (tag.namespace === 8) {
+    const name = ["Left", "Right", "Top", "Bottom", "Middle", "Row", "Column"][tag.tag] || "";
+    return name && tag.label?.trim() ? `${name} ${tag.label.trim()}` : name;
+  }
+  return "";
+}
+
+export function switchAction(event) {
+  const names = {
+    initial_press: "Pressed", long_press: "Held", short_release: "Released",
+    long_release: "Released after hold", multi_press_ongoing: "Pressed again", multi_press_complete: "Multiple presses",
+  };
+  const label = names[event.event_name] || (event.event_name || "Action").replaceAll("_", " ");
+  const count = event.data?.numberOfPressesCounted;
+  return event.event_name === "multi_press_complete" && count > 1 ? `${count} presses` : label;
+}
+
+export function endpointReadings(endpoint, lastAction, unavailable = false) {
+  const readings = [];
+  const add = (name, value) => readings.push({ name, value: unavailable ? `Last: ${value}` : value });
+  if (typeof endpoint.power === "boolean") add("Power", endpoint.power ? "On" : "Off");
+  else if ((endpoint.server_clusters || []).some((cluster) => cluster.id === 6)) add("Power", "Unknown");
+  if (typeof endpoint.level === "number") add("Brightness", `${Math.round(endpoint.level * 100 / 254)}%`);
+  if (typeof endpoint.color_temperature === "number") add("White", `${endpoint.color_temperature} K`);
+  for (const state of endpoint.states || []) {
+    if (["power", "level", "switch_position", "color_temperature"].includes(state.name)) continue;
+    if (["occupancy", "temperature", "illuminance", "humidity", "battery"].includes(state.name)) add(state.name[0].toUpperCase() + state.name.slice(1), state.text);
+  }
+  if ((endpoint.server_clusters || []).some((cluster) => cluster.id === 59) || typeof endpoint.switch_position === "number") {
+    add("Last action", lastAction?.label || "Waiting for an action");
+  }
+  return readings;
 }
 
 export function endpointState(endpoint, unavailable = false) {
@@ -219,14 +298,36 @@ function retryButton() {
   return button;
 }
 
-function card(device, stale) {
+const icons = {
+  light: '<circle cx="12" cy="10" r="5"/><path d="M9 16h6m-5 3h4m-3 2h2"/>',
+  switch: '<rect x="4" y="4" width="16" height="16" rx="4"/><path d="M9 8v8m6-8v8"/>',
+  sensor: '<circle cx="12" cy="12" r="2"/><path d="M7 7a7 7 0 0 0 0 10m10-10a7 7 0 0 1 0 10M4 4a11 11 0 0 0 0 16m16-16a11 11 0 0 1 0 16"/>',
+  outlet: '<rect x="4" y="3" width="16" height="18" rx="4"/><path d="M9 9v3m6-3v3m-6 5h6"/>',
+  bridge: '<rect x="3" y="4" width="7" height="7" rx="2"/><rect x="14" y="4" width="7" height="7" rx="2"/><rect x="8.5" y="15" width="7" height="6" rx="2"/><path d="M6.5 11v2h11v-2M12 13v2"/>',
+  device: '<rect x="4" y="4" width="16" height="16" rx="4"/><circle cx="12" cy="12" r="3"/>',
+};
+
+function actionMessage(result, response) {
+  if (result.status === 200) return { kind: "success", message: "Confirmed by the device" };
+  if (result.status === 504 || response?.error?.includes("outcome may be unknown") || response?.error?.includes("not confirmed")) {
+    return { kind: "uncertain", message: "Outcome unknown. Check the reported state before trying again." };
+  }
+  if (result.status === 503) return { kind: "error", message: "Device or Matter Server unavailable." };
+  if (result.status === 409) return { kind: "error", message: "Another command is in progress." };
+  if (result.status === 422) return { kind: "error", message: "This operation is not supported by the endpoint." };
+  return { kind: "error", message: "The device did not accept the command." };
+}
+
+function card(device, stale, lastActions, ui, sendControl) {
   const offline = device.available === false;
   const unavailable = stale || offline;
-  const article = element("article", `device-card${stale ? " is-stale" : ""}`);
+  const article = element("article", `device-card${unavailable ? " is-stale" : ""}`);
+  article.dataset.nodeId = device.node_id;
   const top = element("div", "card-top");
-  const icon = element("span", "device-icon");
+  const role = deviceRole(device);
+  const icon = element("span", `device-icon icon-${role}`);
   icon.setAttribute("aria-hidden", "true");
-  icon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4M8.5 15.5a6 6 0 1 1 7 0c-.9.6-1.5 1.4-1.5 2.5h-4c0-1.1-.6-1.9-1.5-2.5Z"/></svg>';
+  icon.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${icons[role]}</svg>`;
   const availability = element("span", `availability${stale ? " stale" : offline ? " offline" : ""}`,
     stale ? (offline ? "Offline · stale" : "Data stale") : offline ? "Offline" : "Available");
   top.append(icon, availability);
@@ -234,23 +335,142 @@ function card(device, stale) {
 
   const list = element("div", "endpoint-list");
   const endpoints = (device.endpoints || []).filter((endpoint) => endpoint.id !== 0 ||
-    typeof endpoint.power === "boolean" || typeof endpoint.switch_position === "number");
+    typeof endpoint.power === "boolean" || typeof endpoint.switch_position === "number" || (endpoint.states || []).length);
   if (!endpoints.length) {
     list.append(element("div", "endpoint-row", "No reported state"));
   } else {
     for (const endpoint of endpoints) {
-      const row = element("div", "endpoint-row");
-      const name = endpoint.label?.trim() || `Endpoint ${endpoint.id}`;
-      const state = endpointState(endpoint, unavailable);
-      row.append(element("span", "endpoint-name", name), element("span", `state state-${state.kind}`, state.label));
+      const row = element("section", "endpoint-row");
+      const key = `${device.node_id}/${endpoint.id}`;
+      row.append(element("h4", "endpoint-name", endpointName(endpoint)));
+      const last = lastActions[key];
+      const readings = endpointReadings(endpoint, last, unavailable);
+      if (readings.length) {
+        const values = element("dl", "readings");
+        for (const reading of readings) {
+          values.append(element("dt", "", reading.name), element("dd", "", reading.value));
+        }
+        row.append(values);
+      } else row.append(element("p", "no-state", "No reported state"));
+      if (last?.at) row.append(element("p", "action-time", `Last action at ${new Date(last.at).toLocaleTimeString()}`));
+      const capabilities = endpoint.capabilities || [];
+      const controls = element("div", "endpoint-controls");
+      const disabled = unavailable || ui.pending[key];
+      const powerOn = capabilities.includes("power.on");
+      const powerOff = capabilities.includes("power.off");
+      if (powerOn || powerOff) {
+        const known = typeof endpoint.power === "boolean";
+        const target = known ? !endpoint.power : true;
+        const button = element("button", "power-toggle", known ? (endpoint.power ? "On" : "Off") : "Turn on");
+        button.type = "button";
+        button.disabled = disabled || !(target ? powerOn : powerOff);
+        if (known) {
+          button.setAttribute("role", "switch");
+          button.setAttribute("aria-checked", String(endpoint.power));
+          button.setAttribute("aria-label", `${endpointName(endpoint)} power`);
+        }
+        button.addEventListener("click", () => sendControl(device, endpoint, "power", { action: target ? "on" : "off" }));
+        controls.append(button);
+      }
+      for (const item of [
+        { capability: "brightness.set", action: "brightness", name: "Brightness", min: 1, max: 100, value: typeof endpoint.level === "number" ? Math.round(endpoint.level * 100 / 254) : 50, suffix: "%" },
+        { capability: "color.temperature", action: "temperature", name: "White temperature", min: Math.max(1000, endpoint.color_temperature_min || 1000), max: Math.min(10000, endpoint.color_temperature_max || 10000), value: endpoint.color_temperature || 4000, suffix: " K" },
+      ]) {
+        if (!capabilities.includes(item.capability)) continue;
+        if (item.min > item.max) continue;
+        const label = element("label", "range-control", `${item.name}: `);
+        const value = ui.drafts[`${key}/${item.action}`] ?? Math.max(item.min, Math.min(item.max, item.value));
+        const output = element("output", "", `${value}${item.suffix}`);
+        const slider = element("input");
+        slider.type = "range";
+        slider.min = String(item.min);
+        slider.max = String(item.max);
+        slider.value = String(value);
+        slider.disabled = disabled;
+        slider.addEventListener("focus", () => { ui.activeControl = key; });
+        slider.addEventListener("blur", () => {
+          ui.activeControl = null;
+          if (ui.deferredRender) { ui.deferredRender = false; queueMicrotask(ui.render); }
+        });
+        slider.addEventListener("input", () => { ui.drafts[`${key}/${item.action}`] = Number(slider.value); output.textContent = `${slider.value}${item.suffix}`; });
+        slider.addEventListener("change", () => sendControl(device, endpoint, item.action, { value: Number(slider.value) }));
+        label.append(output, slider);
+        controls.append(label);
+      }
+      if (capabilities.includes("color.hue_saturation") || capabilities.includes("color.xy")) {
+        const label = element("label", "color-control", "Hue and saturation ");
+        const input = element("input");
+        input.type = "color";
+        input.value = ui.drafts[`${key}/color`] || matterColor(endpoint);
+        input.disabled = disabled;
+        input.addEventListener("focus", () => { ui.activeControl = key; });
+        input.addEventListener("blur", () => {
+          ui.activeControl = null;
+          if (ui.deferredRender) { ui.deferredRender = false; queueMicrotask(ui.render); }
+        });
+        input.addEventListener("input", () => { ui.drafts[`${key}/color`] = input.value; });
+        input.addEventListener("change", () => sendControl(device, endpoint, "color", { color: input.value }));
+        label.append(input);
+        controls.append(label);
+        controls.append(element("p", "control-help", "Brightness stays as set above."));
+      }
+      if (controls.childNodes.length) row.append(controls);
+      const feedback = ui.feedback[key];
+      if (ui.pending[key] || feedback) {
+        row.append(element("p", `control-feedback feedback-${ui.pending[key] ? "pending" : feedback.kind}`, ui.pending[key] ? "Waiting for device confirmation…" : feedback.message));
+      }
       list.append(row);
     }
   }
-  article.append(list, element("p", "device-id", `Node ${device.node_id}`));
+  article.append(list);
+  const details = element("details", "device-details");
+  details.open = ui.open.has(device.node_id);
+  details.addEventListener("toggle", () => { if (details.open) ui.open.add(device.node_id); else ui.open.delete(device.node_id); });
+  details.append(element("summary", "", "Device details"));
+  const facts = element("dl", "detail-facts");
+  for (const [name, value] of [["Node ID", device.node_id], ["Matter label", device.label || "None"], ["Product", device.product || "Unknown"], ["Vendor", device.vendor || "Unknown"]]) {
+    facts.append(element("dt", "", name), element("dd", "", value));
+  }
+  details.append(facts);
+  for (const endpoint of endpoints) {
+    const block = element("div", "endpoint-detail");
+    block.append(element("h5", "", `Endpoint ${endpoint.id}`));
+    block.append(element("p", "", `Type: ${(endpoint.device_types || []).map((type) => type.name || type.id).join(", ") || "Unknown"}`));
+    block.append(element("p", "", `Capabilities: ${(endpoint.capabilities || []).join(", ") || "None advertised"}`));
+    if (typeof endpoint.switch_position === "number") block.append(element("p", "", `Last reported position: ${endpoint.switch_position}`));
+    for (const label of endpoint.labels || []) block.append(element("p", "", `${label.name}: ${label.value}`));
+    for (const tag of endpoint.tags || []) block.append(element("p", "", `Matter tag: ${semanticTagName(tag) || `${tag.namespace}:${tag.tag}`}${tag.label ? ` (${tag.label})` : ""}`));
+    details.append(block);
+  }
+  article.append(details, element("p", "device-id", `Node ${device.node_id}`));
   return article;
 }
 
-function render(state) {
+function matterColor(endpoint) {
+  if ((endpoint.color_mode === 1 || typeof endpoint.hue !== "number") && typeof endpoint.color_x === "number" && typeof endpoint.color_y === "number") {
+    const x = endpoint.color_x / 65535;
+    const y = endpoint.color_y / 65535;
+    if (y <= 0) return "#ffffff";
+    const X = x / y, Z = (1 - x - y) / y;
+    const linear = [3.2406 * X - 1.5372 - .4986 * Z, -0.9689 * X + 1.8758 + .0415 * Z, .0557 * X - .2040 + 1.0570 * Z];
+    const maximum = Math.max(...linear, 1);
+    const rgb = linear.map((value) => {
+      const normalized = Math.max(0, value / maximum);
+      return Math.round(255 * (normalized <= .0031308 ? 12.92 * normalized : 1.055 * normalized ** (1 / 2.4) - .055));
+    });
+    return `#${rgb.map((value) => value.toString(16).padStart(2, "0")).join("")}`;
+  }
+  if (typeof endpoint.hue !== "number" || typeof endpoint.saturation !== "number") return "#ffffff";
+  const h = endpoint.hue / 254 * 360;
+  const s = endpoint.saturation / 254;
+  const f = (n) => {
+    const k = (n + h / 30) % 12;
+    return Math.round(255 * (1 - s * Math.max(Math.min(k - 3, 9 - k, 1), -1)));
+  };
+  return `#${[f(0), f(8), f(4)].map((value) => value.toString(16).padStart(2, "0")).join("")}`;
+}
+
+function render(state, ui, sendControl) {
   const connection = document.querySelector("#connection");
   const count = document.querySelector("#device-count");
   const notice = document.querySelector("#notice");
@@ -292,12 +512,13 @@ function render(state) {
       const right = BigInt(b.node_id);
       return left < right ? -1 : left > right ? 1 : 0;
     });
-    grid.replaceChildren(...ordered.map((device) => card(device, stale)));
+    grid.replaceChildren(...ordered.map((device) => card(device, stale, state.lastActions || {}, ui, sendControl)));
   }
 }
 
 async function start() {
   let state = initialState();
+  const ui = { open: new Set(), pending: {}, feedback: {}, drafts: {}, activeControl: null, deferredRender: false };
   let closed = false;
   let commissionPending = false;
   let commissionedNodeID = null;
@@ -315,8 +536,34 @@ async function start() {
   const revealButton = document.querySelector("#commission-reveal");
   const status = document.querySelector("#commission-status");
 
+  async function sendControl(device, endpoint, kind, parameters) {
+    const key = `${device.node_id}/${endpoint.id}`;
+    if (ui.pending[key] || state.status !== "ready" || device.available === false) return;
+    ui.pending[key] = true;
+    delete ui.feedback[key];
+    renderAll();
+    let result;
+    let response;
+    try {
+      const path = kind === "power" ? "/api/v1/devices/power" : "/api/v1/devices/light";
+      const body = kind === "power"
+        ? { target: device.node_id, endpoint: endpoint.id, action: parameters.action }
+        : { target: device.node_id, endpoint: endpoint.id, action: kind, ...parameters };
+      const reply = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), credentials: "same-origin", cache: "no-store", redirect: "error" });
+      result = { status: reply.status };
+      response = await reply.json().catch(() => null);
+    } catch {
+      result = { status: 0 };
+      response = { error: "outcome may be unknown" };
+    }
+    delete ui.pending[key];
+    ui.feedback[key] = actionMessage(result, response);
+    for (const action of ["brightness", "temperature", "color"]) delete ui.drafts[`${key}/${action}`];
+    await refresh();
+  }
+
   function renderAll() {
-    render(state);
+    render(state, ui, sendControl);
     addButton.disabled = state.status !== "ready" || commissionPending;
     submitButton.disabled = state.status !== "ready" || commissionPending;
     nameInput.disabled = commissionPending;
@@ -326,6 +573,7 @@ async function start() {
     status.className = `commission-status${commissionMessage ? ` commission-${commissionMessage.kind}` : ""}`;
     status.textContent = commissionMessage?.message || "";
   }
+  ui.render = renderAll;
 
   function clearCode() {
     codeInput.value = "";
@@ -433,8 +681,12 @@ async function start() {
       const response = await fetch("/api/v1/events", { cache: "no-store", signal: controller.signal });
       if (!response.ok || !response.body) throw new Error("Event stream unavailable");
       await consumeNDJSON(response.body, (event) => {
-        state = applyEvent(state, event);
-        renderAll();
+        const next = applyEvent(state, event);
+        if (next !== state) {
+          state = next;
+          if (ui.activeControl && next.status === "ready") ui.deferredRender = true;
+          else renderAll();
+        }
       }, resetWatchdog);
     } finally {
       clearTimeout(watchdog);

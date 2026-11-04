@@ -75,6 +75,10 @@ h2 { margin-bottom: 0; font-size: 24px; letter-spacing: -.045em; font-weight: 69
 .card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
 .device-icon { width: 43px; height: 43px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 12px; background: #eaf0e7; color: #4c7657; }
 .device-icon svg { width: 25px; height: 25px; }
+.icon-switch { background: #e8e8f1; color: #5a5b83; }
+.icon-sensor { background: #e7f0f1; color: #47797d; }
+.icon-outlet { background: #f2ece3; color: #8a694c; }
+.icon-bridge, .icon-device { background: #eceee9; color: #68766d; }
 .availability { display: inline-flex; align-items: center; gap: 7px; margin-top: 3px; color: #4b805d; font-size: 12px; font-weight: 680; white-space: nowrap; }
 .availability::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 .availability.offline { color: #9a6b37; }
@@ -82,8 +86,35 @@ h2 { margin-bottom: 0; font-size: 24px; letter-spacing: -.045em; font-weight: 69
 .device-name { overflow-wrap: anywhere; margin: 23px 0 4px; font-size: 24px; line-height: 1.15; letter-spacing: -.055em; font-weight: 720; }
 .device-type { margin-bottom: 23px; color: #718074; font-size: 13px; line-height: 1.45; }
 .endpoint-list { display: grid; gap: 9px; }
-.endpoint-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; min-width: 0; padding: 13px 14px; background: #f6f8f3; border: 1px solid #e9ede5; border-radius: 10px; }
-.endpoint-name { min-width: 0; overflow-wrap: anywhere; color: #45554a; font-size: 13px; font-weight: 620; }
+.endpoint-row { min-width: 0; padding: 15px; background: #f6f8f3; border: 1px solid #e9ede5; border-radius: 10px; }
+.endpoint-name { margin: 0 0 10px; overflow-wrap: anywhere; color: #45554a; font-size: 14px; font-weight: 700; }
+.readings { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 7px 14px; margin: 0; align-items: baseline; font-size: 13px; }
+.readings dt { color: #68776b; }
+.readings dd { margin: 0; color: #314238; font-weight: 700; text-align: right; }
+.no-state, .action-time { margin: 7px 0 0; color: #718074; font-size: 12px; }
+.endpoint-controls { display: grid; gap: 12px; margin-top: 14px; padding-top: 14px; border-top: 1px solid #dde6dc; }
+.power-toggle { justify-self: start; min-width: 78px; padding: 8px 14px; border: 1px solid #9bb6a0; border-radius: 999px; background: #e7f1e7; color: #285b39; font: inherit; font-size: 13px; font-weight: 750; cursor: pointer; }
+.power-toggle[aria-checked="false"] { background: #fff; color: #55665a; }
+.power-toggle:disabled { opacity: .55; cursor: not-allowed; }
+.range-control { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 7px; color: #45554a; font-size: 13px; font-weight: 650; }
+.range-control output { color: #314238; }
+.range-control input { grid-column: 1 / -1; width: 100%; accent-color: #4c7657; }
+.color-control { display: flex; align-items: center; justify-content: space-between; color: #45554a; font-size: 13px; font-weight: 650; }
+.color-control input { width: 48px; height: 34px; padding: 2px; border: 1px solid #aabdae; border-radius: 7px; background: white; cursor: pointer; }
+.control-help { margin: -7px 0 0; color: #718074; font-size: 11px; }
+.control-feedback { margin: 10px 0 0; font-size: 12px; line-height: 1.45; }
+.feedback-success { color: #367c4c; }
+.feedback-pending, .feedback-uncertain { color: #8c734f; }
+.feedback-error { color: #975441; }
+.device-details { margin-top: 19px; padding-top: 16px; border-top: 1px solid #e4e9e0; color: #56665b; font-size: 12px; }
+.device-details summary { cursor: pointer; color: #345e41; font-size: 13px; font-weight: 700; }
+.detail-facts { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 7px 12px; margin: 14px 0; }
+.detail-facts dt { color: #718074; }
+.detail-facts dd { margin: 0; overflow-wrap: anywhere; }
+.endpoint-detail { padding-top: 10px; border-top: 1px solid #e7ece4; }
+.endpoint-detail h5 { margin: 0 0 7px; font-size: 12px; }
+.endpoint-detail p { margin: 0 0 7px; overflow-wrap: anywhere; }
+.power-toggle:focus-visible, .range-control input:focus-visible, .color-control input:focus-visible, .device-details summary:focus-visible { outline: 3px solid #71a682; outline-offset: 3px; }
 .state { flex: 0 0 auto; font-size: 13px; font-weight: 750; }
 .state-on { color: #367c4c; }
 .state-off, .state-unknown, .state-none { color: #68756c; }

@@ -76,10 +76,26 @@ not prove every attribute was freshly read at that moment.
 
 ## Later decisions
 
-The viewing increment above is implemented. On/off controls, device inspection,
-brightness, colour, button event history, and automation controls can be
-specified separately. The existing power API can support controls when their
-interaction and confirmation feedback are defined.
+The viewing increment above is implemented. The controls and details below
+extend it; durable button event history and automation controls remain separate
+decisions.
+
+## Capability-driven cards and controls
+
+The next browser increment shows one card per node with distinct light, switch,
+sensor, outlet, bridge, and generic presentation. Endpoint rows show all
+allowlisted friendly readings, including humidity and battery when available.
+A Switch row shows the last action observed in
+the current browser session, with position available in details. Device details
+show IDs, types, advertised capabilities, Matter labels, and optional standard
+endpoint tags. There is no matterctl-owned endpoint naming or room storage.
+
+Power uses one stateful toggle; an unknown reported state offers Turn on.
+Brightness, white temperature, and hue/saturation controls appear only when
+their server-side commands are advertised. Sliders and pickers send one command
+on release. Each endpoint displays pending, confirmed, and uncertain outcomes.
+Offline or stale endpoints have disabled controls. Color control retains the
+current brightness. No uncertain command is replayed automatically.
 
 ## Add device: commissioning increment
 

@@ -251,11 +251,11 @@ only on `127.0.0.1:5580` in the earlier network check.
 
 ## Deferred work
 
-- Browser controls beyond the read-only device list.
+- Browser controls for device families beyond power, brightness, white temperature, and hue/XY color.
 - Button-to-light automation, schedules, scenes, rules, and activity history.
 - `power toggle`, which requires particular care around retries and unknown
   outcomes; the first milestone uses explicit on/off operations.
-- Brightness, color, coverings, locks, and other friendly capability families.
+- Coverings, locks, and other friendly capability families beyond lighting.
 - Sharing onward to another controller and decommissioning.
 - General attribute writes, raw command invocation, bindings, ACLs, fabric
   administration, firmware, Thread diagnostics, cameras, and ICD management.

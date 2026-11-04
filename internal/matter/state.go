@@ -26,8 +26,28 @@ func builtInStateDecoders() []stateDecoder {
 		{clusterSwitch, attributeSwitchCurrentPosition, "switch_position", "", decodeByte},
 		{clusterIlluminanceMeasurement, attributeMeasuredIlluminance, "illuminance", "lx", decodeIlluminance},
 		{clusterTemperatureMeasurement, attributeMeasuredTemperature, "temperature", "°C", decodeTemperature},
+		{clusterRelativeHumidityMeasurement, attributeMeasuredTemperature, "humidity", "%", decodeHumidity},
+		{clusterPowerSource, attributeBatteryPercentRemaining, "battery", "%", decodeBattery},
 		{clusterOccupancySensing, attributeOccupancy, "occupancy", "", decodeOccupancy},
 	}
+}
+
+func decodeHumidity(raw json.RawMessage) (any, string, bool) {
+	var hundredths uint16
+	if json.Unmarshal(raw, &hundredths) != nil || hundredths > 10000 {
+		return nil, "", false
+	}
+	value := float64(hundredths) / 100
+	return value, fmt.Sprintf("%.1f%%", value), true
+}
+
+func decodeBattery(raw json.RawMessage) (any, string, bool) {
+	var halves uint8
+	if json.Unmarshal(raw, &halves) != nil || halves > 200 {
+		return nil, "", false
+	}
+	value := float64(halves) / 2
+	return value, fmt.Sprintf("%.1f%%", value), true
 }
 
 func decodeState(clusterID, attributeID uint32, raw json.RawMessage) (api.State, bool) {

@@ -36,5 +36,5 @@ func Serve(ctx context.Context, httpAddress, matterURL, automationDirectory stri
 		<-automationDone
 		<-done
 	}()
-	return server.Run(ctx, httpAddress, logger, server.WithMatter(upstream), server.WithDevices(upstream), server.WithCommissioning(upstream), server.WithPower(upstream), server.WithLabels(upstream))
+	return server.Run(ctx, httpAddress, logger, server.WithMatter(upstream), server.WithDevices(upstream), server.WithCommissioning(upstream), server.WithPower(upstream), server.WithLight(upstream), server.WithLabels(upstream))
 }

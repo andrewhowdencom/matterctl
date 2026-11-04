@@ -48,6 +48,14 @@ retarget an existing reference after a connection snapshot changes.
 The browser assets are embedded in the Go binary. The page reads the inventory
 endpoint and the unfiltered NDJSON event stream from the same origin. Stream
 snapshots replace the local view; node and endpoint updates reconcile by ID.
+Cards classify endpoints from Matter device types and server clusters, display
+allowlisted readings, and retain the latest Switch action only in browser memory.
+Browser light controls are gated by advertised accepted commands and use
+confirmed reads through the existing Matter Server session. Confirmed reads
+update the cached projection and publish an attribute update so cards do not
+wait for a separate subscription report. The browser and
+service store no room or endpoint-name aliases; optional FixedLabel,
+UserLabel, and Descriptor semantic tags are projected from Matter data.
 After a stream interruption or Matter Server disconnect, the page marks cached
 states as stale until a new inventory snapshot is received.
 Its commissioning panel sends a single same-origin JSON request and refreshes
@@ -98,7 +106,8 @@ Projection exposes device labels, endpoint parents, device types, server/client
 cluster roles, advertised commands/features, and selected state. Node IDs and
 64-bit event counters/timestamps are strings in the application API. Attribute
 values are limited to identity labels and allowlisted OnOff, LevelControl,
-Switch, OccupancySensing, and TemperatureMeasurement state. The decoder list in
+Switch, OccupancySensing, TemperatureMeasurement, RelativeHumidityMeasurement,
+and PowerSource battery state. The decoder list in
 `internal/matter/state.go` maps cluster and attribute IDs to normalized scalar
 values and display text. Adding another standard state means adding its ID
 constants and decoder; projection and the CLI renderer do not need

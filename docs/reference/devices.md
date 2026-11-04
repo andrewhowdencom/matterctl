@@ -50,12 +50,15 @@ plus `available`, `is_bridge`, `observed_at`, and `endpoints`. An endpoint has:
 | Field | Meaning |
 | --- | --- |
 | `id` / optional `parent_id` | Numeric endpoint ID and directly reported parent |
-| `label` | Optional bridged-device label |
+| `label` | Optional bridged-device NodeLabel |
+| `labels` | Optional standard FixedLabel or UserLabel name/value pairs |
+| `tags` | Optional Descriptor TagList entries with namespace, tag ID, and optional text |
 | `device_types` | Advertised type IDs, revisions, and known standard names |
 | `server_clusters` / `client_clusters` | Capability roles, kept separate |
 | `descriptor_complete` | Whether type, server-list, and client-list metadata were present |
-| `capabilities` | Friendly power actions supported by advertised server-side commands |
+| `capabilities` | Friendly power, brightness, and color actions supported by advertised server-side commands |
 | `power`, `level`, `switch_position` | Selected cached state, omitted when unknown |
+| `color_temperature`, `color_temperature_min`, `color_temperature_max`, `hue`, `saturation`, `color_x`, `color_y`, `color_mode` | Selected cached ColorControl state and physical white range, omitted when unknown; temperature values are Kelvin |
 | `states` | Allowlisted, normalized state values with cluster/attribute IDs, name, JSON scalar value, display text, and optional unit |
 
 Clusters expose their ID, a standard name when available, accepted commands,
@@ -67,9 +70,11 @@ their Matter names, including `Off`, `On`, and `Toggle` for OnOff.
 
 The API projects selected fields rather than returning raw node dumps.
 `states` currently covers OnOff, LevelControl, Switch, IlluminanceMeasurement,
-OccupancySensing, and TemperatureMeasurement values. Occupancy is a Boolean in
+OccupancySensing, TemperatureMeasurement, RelativeHumidityMeasurement, and
+PowerSource battery percentage values. Occupancy is a Boolean in
 JSON and `occupied`/`unoccupied` in text. Temperature is converted from
-hundredths of a degree Celsius to degrees Celsius. Illuminance is converted
+hundredths of a degree Celsius to degrees Celsius; humidity is converted from
+hundredths of a percent and battery level from half-percent units. Illuminance is converted
 from Matter's logarithmic measurement to lux; zero means below the measurable
 range. Null or invalid values do not appear in
 inventory states. Unselected attribute values, including commissioning/security

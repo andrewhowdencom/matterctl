@@ -179,6 +179,7 @@ func (c *Client) executeLighting(ctx context.Context, action automation.Action) 
 		}
 		var got int64
 		if json.Unmarshal(raw, &got) == nil && absAutomation(got-expected) <= 1 {
+			c.publishConfirmedAttribute(session, action.NodeID, action.Endpoint, clusterID, attributeID, raw)
 			return nil
 		}
 		timer := time.NewTimer(200 * time.Millisecond)

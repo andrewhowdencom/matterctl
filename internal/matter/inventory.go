@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"slices"
 	"strconv"
 	"time"
@@ -150,6 +151,39 @@ func newEvent(kind string, id api.NodeID, data any) api.Event {
 		kind, raw = "stream_error", json.RawMessage(`{"error":"cannot encode event"}`)
 	}
 	return api.Event{Type: kind, NodeID: id, ObservedAt: time.Now().UTC(), Data: raw}
+}
+
+// A post-command read is an observation of the device, even if no subscription
+// report follows. Publish it so clients do not keep displaying older state.
+func (c *Client) publishConfirmedAttribute(session *session, id api.NodeID, endpoint uint16, cluster, attribute uint32, raw json.RawMessage) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !c.ready || c.current != session {
+		return
+	}
+	n, found := c.nodes[id]
+	if !found {
+		return
+	}
+	path := fmt.Sprintf("%d/%d/%d", endpoint, cluster, attribute)
+	if n.Attributes == nil {
+		n.Attributes = map[string]json.RawMessage{}
+	}
+	n.Attributes[path] = append(json.RawMessage(nil), raw...)
+	n.observedAt = time.Now().UTC()
+	c.nodes[id] = n
+	c.observedAt = n.observedAt
+	device := project(n)
+	var state *api.State
+	if value, known := decodeState(cluster, attribute, raw); known {
+		state = &value
+	}
+	c.publishLocked(newEvent("attribute_updated", id, struct {
+		Path          string     `json:"path"`
+		AttributeName string     `json:"attribute_name,omitempty"`
+		Device        api.Device `json:"device"`
+		State         *api.State `json:"state,omitempty"`
+	}{path, attributeName(cluster, attribute), device, state}))
 }
 
 func (c *Client) publishLocked(event api.Event) {
