@@ -15,6 +15,8 @@ See [user documentation](docs/index.md) for connection checks and the API
 reference, and [architecture](ARCHITECTURE.md) for application boundaries.
 See [automation setup](docs/how-to/preview-automations.md) for Starlark rules,
 the BILRESA example, and the preview CLI.
+See [SkyConnect Thread setup](docs/how-to/setup-skyconnect-thread.md) for the
+host's OpenThread border router deployment and credential import.
 
 ## Development
 
