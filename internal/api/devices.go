@@ -90,12 +90,14 @@ type DeviceType struct {
 }
 
 type Cluster struct {
-	ID               uint32          `json:"id"`
-	Name             string          `json:"name,omitempty"`
-	FeatureMap       json.RawMessage `json:"feature_map,omitempty"`
-	AcceptedCommands []Command       `json:"accepted_commands"`
-	Attributes       []uint32        `json:"attributes"`
-	Events           []uint32        `json:"events"`
+	ID               uint32            `json:"id"`
+	Name             string            `json:"name,omitempty"`
+	FeatureMap       json.RawMessage   `json:"feature_map,omitempty"`
+	AcceptedCommands []Command         `json:"accepted_commands"`
+	Attributes       []uint32          `json:"attributes"`
+	AttributeNames   map[uint32]string `json:"attribute_names,omitempty"`
+	Events           []uint32          `json:"events"`
+	EventNames       map[uint32]string `json:"event_names,omitempty"`
 }
 
 type Command struct {

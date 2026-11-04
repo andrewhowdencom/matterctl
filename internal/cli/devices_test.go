@@ -15,7 +15,10 @@ import (
 )
 
 func TestDeviceCommandsUseAPIAndPreserveLargeIDs(t *testing.T) {
-	device := api.Device{NodeID: "18446744069414584320", Label: "Couch lamp", Available: true, Endpoints: []api.Endpoint{{ID: 1, ServerClusters: []api.Cluster{{ID: 6, Name: "OnOff", AcceptedCommands: []api.Command{{ID: 1, Name: "on"}}}}, Capabilities: []string{"power.on"}}}}
+	device := api.Device{NodeID: "18446744069414584320", Label: "Couch lamp", Available: true, Endpoints: []api.Endpoint{{ID: 1, ServerClusters: []api.Cluster{
+		{ID: 6, Name: "OnOff", AcceptedCommands: []api.Command{{ID: 1, Name: "On"}}, Attributes: []uint32{0}, AttributeNames: map[uint32]string{0: "OnOff"}},
+		{ID: 40, Name: "BasicInformation", Events: []uint32{0}, EventNames: map[uint32]string{0: "StartUp"}},
+	}, Capabilities: []string{"power.on"}}}}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var result any = device
 		if r.URL.Path == api.DevicesPath {
@@ -44,6 +47,9 @@ func TestDeviceCommandsUseAPIAndPreserveLargeIDs(t *testing.T) {
 		}
 		if args[len(args)-1] == "json" && !json.Valid(output.Bytes()) {
 			t.Fatalf("invalid JSON: %s", &output)
+		}
+		if len(args) >= 2 && args[1] == "inspect" && args[len(args)-1] != "json" && (!strings.Contains(output.String(), "0 (OnOff)") || !strings.Contains(output.String(), "0 (StartUp)")) {
+			t.Fatalf("standard names missing from inspection: %s", &output)
 		}
 	}
 }
@@ -117,10 +123,11 @@ func TestEventWatchTextShowsCompactStateChanges(t *testing.T) {
 		{"power", api.Event{Type: "attribute_updated", ObservedAt: observed, NodeID: "12", Data: data}, `attribute_updated node=12 device="Couch lamp" attribute=1/6/0 endpoint=1 label="Light" type="Extended Color Light" power=on`},
 		{"product fallback", api.Event{Type: "attribute_updated", ObservedAt: observed, NodeID: "2", Data: json.RawMessage(`{"path":"9/59/1","attribute_name":"Switch.CurrentPosition","device":{"node_id":"2","product":"BILRESA scroll wheel","endpoints":[{"id":9,"device_types":[{"id":15,"name":"Generic Switch"}]}]},"state":{"name":"switch_position","text":"1"}}`)}, `attribute_updated node=2 device="BILRESA scroll wheel" attribute=Switch.CurrentPosition path=9/59/1 endpoint=9 type="Generic Switch" switch_position=1`},
 		{"occupancy", api.Event{Type: "attribute_updated", ObservedAt: observed, NodeID: "12", Data: json.RawMessage(`{"path":"2/1030/0","device":{"node_id":"12","endpoints":[{"id":2,"device_types":[{"id":263,"name":"Occupancy Sensor","revision":1}]}]},"state":{"cluster_id":1030,"attribute_id":0,"name":"occupancy","value":true,"text":"occupied"}}`)}, `attribute_updated node=12 attribute=2/1030/0 endpoint=2 type="Occupancy Sensor" occupancy=occupied`},
+		{"illuminance", api.Event{Type: "attribute_updated", ObservedAt: observed, NodeID: "3", Data: json.RawMessage(`{"path":"2/1024/0","attribute_name":"IlluminanceMeasurement.MeasuredValue","device":{"node_id":"3","product":"Presence Multi-Sensor FP300","endpoints":[{"id":2,"device_types":[{"id":262,"name":"Light Sensor","revision":1}]}]},"state":{"cluster_id":1024,"attribute_id":0,"name":"illuminance","value":10,"text":"10.0 lx","unit":"lx"}}`)}, `attribute_updated node=3 device="Presence Multi-Sensor FP300" attribute=IlluminanceMeasurement.MeasuredValue path=2/1024/0 endpoint=2 type="Light Sensor" illuminance=10.0 lx`},
 		{"temperature", api.Event{Type: "attribute_updated", ObservedAt: observed, NodeID: "12", Data: json.RawMessage(`{"path":"3/1026/0","device":{"node_id":"12","endpoints":[{"id":3}]},"state":{"cluster_id":1026,"attribute_id":0,"name":"temperature","value":21.5,"text":"21.50°C","unit":"°C"}}`)}, `attribute_updated node=12 attribute=3/1026/0 endpoint=3 temperature=21.50°C`},
 		{"unknown attribute", api.Event{Type: "attribute_updated", ObservedAt: observed, NodeID: "12", Data: json.RawMessage(`{"path":"1/29/1","device":{"node_id":"12","endpoints":[{"id":1}]}}`)}, `attribute_updated node=12 attribute=1/29/1 endpoint=1`},
 		{"endpoint", api.Event{Type: "endpoint_added", ObservedAt: observed, NodeID: "12", Data: json.RawMessage(`{"endpoint_id":2,"device":{"node_id":"12","endpoints":[{"id":2,"label":"Switch"}]}}`)}, `endpoint_added node=12 endpoint=2 label="Switch"`},
-		{"node event", api.Event{Type: "node_event", ObservedAt: observed, NodeID: "12", Data: json.RawMessage(`{"endpoint_id":2,"cluster_id":59,"event_id":1,"event_name":"initial_press","event_number":"18446744073709551615","data":{"newPosition":1,"numberOfPressesCounted":2}}`)}, `node_event node=12 endpoint=2 cluster=59 event=1 name=initial_press number=18446744073709551615 new_position=1 presses=2`},
+		{"node event", api.Event{Type: "node_event", ObservedAt: observed, NodeID: "12", Data: json.RawMessage(`{"endpoint_id":2,"cluster_id":59,"cluster_name":"Switch","event_id":1,"event_name":"initial_press","event_number":"18446744073709551615","data":{"newPosition":1,"numberOfPressesCounted":2}}`)}, `node_event node=12 endpoint=2 cluster=59 cluster_name=Switch event=1 name=initial_press number=18446744073709551615 new_position=1 presses=2`},
 		{"node event product fallback", api.Event{Type: "node_event", ObservedAt: observed, NodeID: "2", Data: json.RawMessage(`{"endpoint_id":9,"cluster_id":59,"event_id":2,"event_name":"long_press","event_number":"199340","product":"BILRESA scroll wheel","data":{"newPosition":1}}`)}, `node_event node=2 device="BILRESA scroll wheel" endpoint=9 cluster=59 event=2 name=long_press number=199340 new_position=1`},
 		{"inventory with states", api.Event{Type: "inventory", ObservedAt: observed, NodeID: "12", Data: json.RawMessage(`{"connection":{"state":"connected"},"ready":true,"devices":[{"node_id":"12","available":true,"endpoints":[{"id":1,"device_types":[{"id":263,"name":"Occupancy Sensor","revision":1}],"states":[{"cluster_id":1030,"attribute_id":0,"name":"occupancy","value":true,"text":"occupied"}]}]}]}`)}, `inventory node=12 connection=connected ready=true devices=1 available=true endpoints=1 types="Occupancy Sensor" states="occupancy=occupied"`},
 	}

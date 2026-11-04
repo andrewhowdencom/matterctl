@@ -24,6 +24,9 @@ func TestStateDecodersNormalizeOnlyKnownValues(t *testing.T) {
 		{"power", clusterOnOff, attributeOnOff, `true`, "power", `true`, "on", "", true},
 		{"level", clusterLevelControl, attributeCurrentLevel, `42`, "level", `42`, "42", "", true},
 		{"switch", clusterSwitch, attributeSwitchCurrentPosition, `1`, "switch_position", `1`, "1", "", true},
+		{"illuminance", clusterIlluminanceMeasurement, attributeMeasuredIlluminance, `10001`, "illuminance", `10`, "10.0 lx", "lx", true},
+		{"illuminance below range", clusterIlluminanceMeasurement, attributeMeasuredIlluminance, `0`, "illuminance", `0`, "below measurable range", "lx", true},
+		{"illuminance invalid", clusterIlluminanceMeasurement, attributeMeasuredIlluminance, `65535`, "illuminance", `null`, "unknown", "lx", true},
 		{"temperature", clusterTemperatureMeasurement, attributeMeasuredTemperature, `-125`, "temperature", `-1.25`, "-1.25°C", "°C", true},
 		{"occupancy bitmap", clusterOccupancySensing, attributeOccupancy, `3`, "occupancy", `true`, "occupied", "", true},
 		{"occupancy boolean", clusterOccupancySensing, attributeOccupancy, `true`, "occupancy", `true`, "occupied", "", true},
@@ -32,6 +35,7 @@ func TestStateDecodersNormalizeOnlyKnownValues(t *testing.T) {
 		{"unknown attribute", clusterOccupancySensing, 9, `{"private_key":"secret"}`, "", "", "", "", false},
 		{"invalid known value", clusterOccupancySensing, attributeOccupancy, `{"private_key":"secret"}`, "", "", "", "", false},
 		{"invalid temperature", clusterTemperatureMeasurement, attributeMeasuredTemperature, `-32768`, "", "", "", "", false},
+		{"invalid illuminance", clusterIlluminanceMeasurement, attributeMeasuredIlluminance, `-1`, "", "", "", "", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -53,8 +57,44 @@ func TestAttributeNamesAreScopedByCluster(t *testing.T) {
 	if got := attributeName(clusterSwitch, attributeSwitchCurrentPosition); got != "Switch.CurrentPosition" {
 		t.Fatalf("Switch attribute name = %q", got)
 	}
-	if got := attributeName(clusterBasicInformation, attributeSwitchCurrentPosition); got != "" {
-		t.Fatalf("invented name for unrelated cluster: %q", got)
+	if got := attributeName(clusterBasicInformation, attributeSwitchCurrentPosition); got != "BasicInformation.VendorName" {
+		t.Fatalf("attribute ID was not scoped to its cluster: %q", got)
+	}
+	if got := attributeName(clusterIlluminanceMeasurement, attributeMeasuredIlluminance); got != "IlluminanceMeasurement.MeasuredValue" {
+		t.Fatalf("illuminance name = %q", got)
+	}
+	if got := attributeName(clusterIlluminanceMeasurement, attributeFeatureMap); got != "IlluminanceMeasurement.FeatureMap" {
+		t.Fatalf("global attribute name = %q", got)
+	}
+	if got := attributeName(clusterIlluminanceMeasurement, 9999); got != "" {
+		t.Fatalf("invented name for unknown attribute: %q", got)
+	}
+}
+
+func TestStandardCatalogNamesTypesClustersCommandsAndEvents(t *testing.T) {
+	if got := deviceTypeName(262); got != "Light Sensor" {
+		t.Fatalf("light sensor type = %q", got)
+	}
+	if got := clusterName(1024); got != "IlluminanceMeasurement" {
+		t.Fatalf("illuminance cluster = %q", got)
+	}
+	if got := commandName(clusterOnOff, 1); got != "On" {
+		t.Fatalf("OnOff command = %q", got)
+	}
+	if got := commandName(84, 0); got != "ChangeToMode" {
+		t.Fatalf("inherited mode command = %q", got)
+	}
+	if got := eventName(clusterSwitch, 1); got != "initial_press" {
+		t.Fatalf("Switch event = %q", got)
+	}
+	if got := eventName(clusterOccupancySensing, 0); got != "occupancy_changed" {
+		t.Fatalf("occupancy event = %q", got)
+	}
+	if got := eventName(56, 0); got != "dst_table_empty" {
+		t.Fatalf("event acronym = %q", got)
+	}
+	if got := deviceTypeName(0xFFF10000); got != "" {
+		t.Fatalf("invented vendor device type = %q", got)
 	}
 }
 
@@ -109,5 +149,43 @@ func TestSensorStateProjectsAndStreamsWithoutRawAttributes(t *testing.T) {
 	event = <-events
 	if strings.Contains(string(event.Data), "must-not-leak") || strings.Contains(string(event.Data), `"state"`) {
 		t.Fatalf("unknown value leaked: %s", event.Data)
+	}
+}
+
+func TestLightSensorStateProjectsAndStreams(t *testing.T) {
+	n := fixtureNode(t, "3", "Presence Multi-Sensor FP300")
+	n.Attributes["2/29/0"] = json.RawMessage(`[{"deviceType":262,"revision":1}]`)
+	n.Attributes["2/29/1"] = json.RawMessage(`[29,1024]`)
+	n.Attributes["2/1024/0"] = json.RawMessage(`1`)
+	c := initializedClient(t, n)
+	device, err := c.Inspect(context.Background(), "3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	light := device.Endpoints[2]
+	if light.DeviceTypes[0].Name != "Light Sensor" || len(light.States) != 1 || light.States[0].Text != "1.0 lx" {
+		t.Fatalf("light sensor projection = %+v", light)
+	}
+	n.Attributes["2/1024/0"] = json.RawMessage(`65535`)
+	if invalid := project(n).Endpoints[2].States; len(invalid) != 0 {
+		t.Fatalf("invalid illuminance projected: %+v", invalid)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	events, err := c.Watch(ctx, "3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	<-events // Initial inventory.
+	if err := c.applyEvent(c.current, reply{Event: "attribute_updated", Data: json.RawMessage(`[3,"2/1024/0",10001]`)}); err != nil {
+		t.Fatal(err)
+	}
+	event := <-events
+	var update struct {
+		AttributeName string     `json:"attribute_name"`
+		State         *api.State `json:"state"`
+	}
+	if err := json.Unmarshal(event.Data, &update); err != nil || update.AttributeName != "IlluminanceMeasurement.MeasuredValue" || update.State == nil || update.State.Text != "10.0 lx" {
+		t.Fatalf("light sensor event = %s: %v", event.Data, err)
 	}
 }

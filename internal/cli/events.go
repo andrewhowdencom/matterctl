@@ -148,6 +148,7 @@ func printEvent(output io.Writer, event api.Event) error {
 		var update struct {
 			EndpointID  uint16           `json:"endpoint_id"`
 			ClusterID   uint32           `json:"cluster_id"`
+			ClusterName string           `json:"cluster_name"`
 			EventID     uint32           `json:"event_id"`
 			EventName   string           `json:"event_name"`
 			EventNumber string           `json:"event_number"`
@@ -160,7 +161,11 @@ func printEvent(output io.Writer, event api.Event) error {
 			return err
 		}
 		line += deviceIdentity(update.Label, update.Product)
-		line += fmt.Sprintf(" endpoint=%d cluster=%d event=%d", update.EndpointID, update.ClusterID, update.EventID)
+		line += fmt.Sprintf(" endpoint=%d cluster=%d", update.EndpointID, update.ClusterID)
+		if update.ClusterName != "" {
+			line += " cluster_name=" + update.ClusterName
+		}
+		line += fmt.Sprintf(" event=%d", update.EventID)
 		if update.EventName != "" {
 			line += " name=" + update.EventName
 		}
