@@ -58,18 +58,42 @@ type Device struct {
 }
 
 type Endpoint struct {
-	ID                 uint16       `json:"id"`
-	ParentID           *uint16      `json:"parent_id,omitempty"`
-	Label              string       `json:"label,omitempty"`
-	DeviceTypes        []DeviceType `json:"device_types"`
-	ServerClusters     []Cluster    `json:"server_clusters"`
-	ClientClusters     []Cluster    `json:"client_clusters"`
-	DescriptorComplete bool         `json:"descriptor_complete"`
-	Capabilities       []string     `json:"capabilities"`
-	Power              *bool        `json:"power,omitempty"`
-	Level              *uint8       `json:"level,omitempty"`
-	SwitchPosition     *uint8       `json:"switch_position,omitempty"`
-	States             []State      `json:"states,omitempty"`
+	ID                  uint16        `json:"id"`
+	ParentID            *uint16       `json:"parent_id,omitempty"`
+	Label               string        `json:"label,omitempty"`
+	Labels              []Label       `json:"labels,omitempty"`
+	Tags                []SemanticTag `json:"tags,omitempty"`
+	DeviceTypes         []DeviceType  `json:"device_types"`
+	ServerClusters      []Cluster     `json:"server_clusters"`
+	ClientClusters      []Cluster     `json:"client_clusters"`
+	DescriptorComplete  bool          `json:"descriptor_complete"`
+	Capabilities        []string      `json:"capabilities"`
+	Power               *bool         `json:"power,omitempty"`
+	Level               *uint8        `json:"level,omitempty"`
+	ColorTemperature    *uint16       `json:"color_temperature,omitempty"`
+	ColorTemperatureMin *uint16       `json:"color_temperature_min,omitempty"`
+	ColorTemperatureMax *uint16       `json:"color_temperature_max,omitempty"`
+	Hue                 *uint8        `json:"hue,omitempty"`
+	Saturation          *uint8        `json:"saturation,omitempty"`
+	ColorX              *uint16       `json:"color_x,omitempty"`
+	ColorY              *uint16       `json:"color_y,omitempty"`
+	ColorMode           *uint8        `json:"color_mode,omitempty"`
+	SwitchPosition      *uint8        `json:"switch_position,omitempty"`
+	States              []State       `json:"states,omitempty"`
+}
+
+// Label is a standard Matter FixedLabel or UserLabel endpoint tag.
+type Label struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
+}
+
+// SemanticTag is a standard Descriptor TagList entry. Namespace and tag IDs
+// retain their meaning even when the optional text label is absent.
+type SemanticTag struct {
+	Namespace uint8  `json:"namespace"`
+	Tag       uint8  `json:"tag"`
+	Label     string `json:"label,omitempty"`
 }
 
 // State is an allowlisted, normalized attribute value. Value is a JSON scalar;

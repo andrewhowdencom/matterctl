@@ -5,11 +5,24 @@ host's LAN address on another device. The browser page lists devices
 commissioned to this Matter controller. A device that exists only in Google
 Home will not appear until it is shared with this controller.
 
-Each card shows the Matter label when available, a device type, node ID,
-availability, and reported endpoint state. An On/Off endpoint shows **On** or
-**Off**; **Unknown** means its On/Off state has not been reported. An event-only
-button can appear without an On/Off state. Multi-endpoint devices show their
-states separately. Names may differ from Google Home nicknames.
+Each card shows the Matter label when available, a device type, availability,
+and every supported friendly reading for its endpoints. Lights show power,
+brightness, and white temperature when reported. Sensors show occupancy,
+temperature, humidity, illuminance, and battery level when reported. A switch shows its latest action
+seen by this browser session; after a reload it waits for the next action.
+Open **Device details** for node and endpoint IDs, advertised capabilities,
+and optional standard Matter endpoint tags. Switches use standard semantic
+tags such as Up, Down, Left, and Right when the device advertises them.
+Ordinary endpoints do not always have a human-readable name, so their type and ID appear instead. Names may
+differ from Google Home nicknames.
+
+Where an endpoint advertises the necessary commands, the card offers a power
+toggle, brightness slider, white temperature slider, or hue and saturation
+picker. Power with an unknown reported state offers **Turn on**. Slider and
+picker changes are sent when released. Each command shows pending and confirmed
+feedback, or explains when the outcome is unknown. Color uses the current
+brightness setting. Controls are disabled while the device is offline or the
+inventory is stale. The page does not save endpoint names or room assignments.
 
 The page updates while open. **Offline** indicates the device's last reported
 availability was false. **Last: On** or **Last: Off** identifies a retained

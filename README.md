@@ -4,9 +4,9 @@ A Go CLI and browser interface for local automation through OHF Matter Server.
 `serve` connects to Matter Server and exposes an HTTP API. The CLI can inspect
 the connection, discover and commission shared devices, inspect their capabilities,
 set and confirm on/off state, write Matter labels, and watch live events.
-The browser page lists commissioned devices and their reported state, updating
-as Matter Server sends changes. It can also add an already-networked Matter
-device using a fresh sharing code.
+The browser page shows device-specific state and controls supported by each
+endpoint's advertised Matter commands, updating as Matter Server sends changes.
+It can also add an already-networked Matter device using a fresh sharing code.
 
 See the [implementation plan](PLAN.md) for the agreed direction, proposed
 commands, and milestones toward controlling the first light.

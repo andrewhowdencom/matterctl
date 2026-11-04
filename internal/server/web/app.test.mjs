@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { applyEvent, applyInventory, beginCommission, commissionOutcome, consumeNDJSON, deviceName, deviceType, endpointState, submitCommission, validCommissionCode, validDeviceName } from "./app.mjs";
+import { applyEvent, applyInventory, beginCommission, commissionOutcome, consumeNDJSON, deviceName, deviceRole, deviceType, endpointName, endpointReadings, endpointState, semanticTagName, submitCommission, switchAction, validCommissionCode, validDeviceName } from "./app.mjs";
 
 const denLight = {
   node_id: "1",
@@ -20,6 +20,28 @@ test("names, types, and endpoint states reflect reported values", () => {
   assert.deepEqual(endpointState({ id: 1, server_clusters: [{ id: 6 }] }), { label: "Unknown", kind: "unknown" });
   assert.deepEqual(endpointState({ id: 1, client_clusters: [{ id: 6 }] }), { label: "No on/off state", kind: "none" });
   assert.deepEqual(endpointState({ id: 1, switch_position: 2 }), { label: "Position 2", kind: "none" });
+});
+
+test("device roles and readings use Matter server metadata", () => {
+  assert.equal(deviceRole(denLight), "light");
+  assert.equal(deviceRole({ endpoints: [{ id: 1, server_clusters: [{ id: 59 }] }] }), "switch");
+  assert.equal(deviceRole({ endpoints: [{ id: 1, states: [{ name: "occupancy", text: "occupied" }], server_clusters: [{ id: 1030 }] }] }), "sensor");
+  assert.equal(endpointName({ id: 7, device_types: [{ name: "Generic Switch" }] }), "Generic Switch · 7");
+  assert.equal(endpointName({ id: 7, labels: [{ name: "button", value: "Wheel up" }] }), "Wheel up");
+  assert.equal(endpointName({ id: 7, tags: [{ namespace: 67, tag: 3 }] }), "Up · 7");
+  assert.equal(endpointName({ id: 7, tags: [{ namespace: 8, tag: 6, label: "3" }, { namespace: 67, tag: 3 }, { namespace: 67, tag: 8, label: "rotary" }] }), "Rotary 3 Up · 7");
+  assert.equal(endpointName({ id: 1, tags: [{ namespace: 8, tag: 2 }, { namespace: 67, tag: 8, label: "button 1" }] }), "Button 1 · 1");
+  assert.equal(semanticTagName({ namespace: 8, tag: 0 }), "Left");
+  assert.deepEqual(endpointReadings({ id: 1, states: [{ name: "occupancy", text: "occupied" }, { name: "temperature", text: "21.5°C" }] }), [
+    { name: "Occupancy", value: "occupied" }, { name: "Temperature", value: "21.5°C" },
+  ]);
+  assert.deepEqual(endpointReadings({ id: 2, states: [{ name: "humidity", text: "46.0%" }, { name: "battery", text: "77.5%" }] }), [
+    { name: "Humidity", value: "46.0%" }, { name: "Battery", value: "77.5%" },
+  ]);
+  assert.equal(switchAction({ event_name: "multi_press_complete", data: { numberOfPressesCounted: 2 } }), "2 presses");
+  let state = applyInventory({}, { ready: true, connection: { state: "connected" }, devices: [{ node_id: "2" }] });
+  state = applyEvent(state, { type: "node_event", node_id: "2", observed_at: "2026-11-04T12:00:00Z", data: { endpoint_id: 7, cluster_id: 59, event_name: "short_release" } });
+  assert.equal(state.lastActions["2/7"].label, "Released");
 });
 
 test("snapshot and events add, update, and remove distinct devices", () => {

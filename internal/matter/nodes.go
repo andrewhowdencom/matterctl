@@ -73,6 +73,39 @@ func project(n node) api.Device {
 		if parent, ok := n.EndpointParents[id]; ok {
 			endpoint.ParentID = &parent
 		}
+		if raw, found := n.Attributes[fmt.Sprintf("%d/%d/%d", id, clusterDescriptor, attributeTagList)]; found {
+			var tags []struct {
+				NamespaceID   *uint8 `json:"namespaceID"`
+				NamespaceId   *uint8 `json:"namespaceId"`
+				WireNamespace *uint8 `json:"1"`
+				Tag           *uint8 `json:"tag"`
+				WireTag       *uint8 `json:"2"`
+				Label         string `json:"label"`
+				WireLabel     string `json:"3"`
+			}
+			if json.Unmarshal(raw, &tags) == nil {
+				for _, tag := range tags {
+					namespace, value := tag.NamespaceID, tag.Tag
+					if namespace == nil {
+						namespace = tag.NamespaceId
+					}
+					if namespace == nil {
+						namespace = tag.WireNamespace
+					}
+					if value == nil {
+						value = tag.WireTag
+					}
+					if namespace == nil || value == nil {
+						continue
+					}
+					label := tag.Label
+					if label == "" {
+						label = tag.WireLabel
+					}
+					endpoint.Tags = append(endpoint.Tags, api.SemanticTag{Namespace: *namespace, Tag: *value, Label: label})
+				}
+			}
+		}
 		// matter.js uses the numeric struct field IDs on the wire. Accept the
 		// named representation too, as used by other Matter controllers.
 		types, typesKnown := attribute[[]struct {
@@ -110,6 +143,28 @@ func project(n node) api.Device {
 		for _, clusterID := range uniqueSorted(servers) {
 			cluster := projectCluster(n, id, clusterID)
 			endpoint.ServerClusters = append(endpoint.ServerClusters, cluster)
+			if clusterID == clusterFixedLabel || clusterID == clusterUserLabel {
+				var values []struct {
+					Name      string `json:"label"`
+					Value     string `json:"value"`
+					WireName  string `json:"0"`
+					WireValue string `json:"1"`
+				}
+				if raw, found := n.Attributes[fmt.Sprintf("%d/%d/%d", id, clusterID, attributeLabelList)]; found && json.Unmarshal(raw, &values) == nil {
+					for _, value := range values {
+						name, text := value.Name, value.Value
+						if name == "" {
+							name = value.WireName
+						}
+						if text == "" {
+							text = value.WireValue
+						}
+						if name != "" && text != "" {
+							endpoint.Labels = append(endpoint.Labels, api.Label{Name: name, Value: text})
+						}
+					}
+				}
+			}
 			if clusterID == clusterOnOff {
 				for _, command := range cluster.AcceptedCommands {
 					if name := powerName(command.ID); name != "" {
@@ -121,8 +176,63 @@ func project(n node) api.Device {
 				}
 			}
 			if clusterID == clusterLevelControl {
+				for _, command := range cluster.AcceptedCommands {
+					if command.ID == commandMoveToLevelWithOnOff {
+						endpoint.Capabilities = append(endpoint.Capabilities, "brightness.set")
+					}
+				}
+			}
+			if clusterID == clusterLevelControl {
 				if level, ok := attribute[uint8](n, id, clusterLevelControl, attributeCurrentLevel); ok {
 					endpoint.Level = &level
+				}
+			}
+			if clusterID == clusterColorControl {
+				for _, command := range cluster.AcceptedCommands {
+					switch command.ID {
+					case commandMoveToColorTemperature:
+						endpoint.Capabilities = append(endpoint.Capabilities, "color.temperature")
+					case commandMoveToHueAndSaturation:
+						endpoint.Capabilities = append(endpoint.Capabilities, "color.hue_saturation")
+					case commandMoveToColor:
+						endpoint.Capabilities = append(endpoint.Capabilities, "color.xy")
+					}
+				}
+				if value, ok := attribute[uint16](n, id, clusterColorControl, attributeColorTemperature); ok && value > 0 {
+					kelvinValue := 1_000_000 / uint32(value)
+					if kelvinValue <= 65535 {
+						kelvin := uint16(kelvinValue)
+						endpoint.ColorTemperature = &kelvin
+					}
+				}
+				if value, ok := attribute[uint16](n, id, clusterColorControl, attributeColorTempPhysicalMax); ok && value >= 100 && value <= 1000 {
+					kelvinValue := 1_000_000 / uint32(value)
+					if kelvinValue <= 65535 {
+						kelvin := uint16(kelvinValue)
+						endpoint.ColorTemperatureMin = &kelvin
+					}
+				}
+				if value, ok := attribute[uint16](n, id, clusterColorControl, attributeColorTempPhysicalMin); ok && value >= 100 && value <= 1000 {
+					kelvinValue := 1_000_000 / uint32(value)
+					if kelvinValue <= 65535 {
+						kelvin := uint16(kelvinValue)
+						endpoint.ColorTemperatureMax = &kelvin
+					}
+				}
+				if value, ok := attribute[uint8](n, id, clusterColorControl, attributeCurrentHue); ok {
+					endpoint.Hue = &value
+				}
+				if value, ok := attribute[uint8](n, id, clusterColorControl, attributeCurrentSaturation); ok {
+					endpoint.Saturation = &value
+				}
+				if value, ok := attribute[uint16](n, id, clusterColorControl, attributeCurrentX); ok {
+					endpoint.ColorX = &value
+				}
+				if value, ok := attribute[uint16](n, id, clusterColorControl, attributeCurrentY); ok {
+					endpoint.ColorY = &value
+				}
+				if value, ok := attribute[uint8](n, id, clusterColorControl, attributeColorMode); ok {
+					endpoint.ColorMode = &value
 				}
 			}
 			if clusterID == clusterSwitch {

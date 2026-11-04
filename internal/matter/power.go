@@ -99,6 +99,7 @@ func (c *Client) Power(ctx context.Context, request api.PowerRequest) (api.Power
 		}
 		var power bool
 		if raw, ok := values[path]; ok && json.Unmarshal(raw, &power) == nil && power == want {
+			c.publishConfirmedAttribute(session, id, endpoint, clusterOnOff, attributeOnOff, raw)
 			return api.PowerResult{NodeID: id, Endpoint: endpoint, Power: power, ConfirmedAt: time.Now().UTC()}, nil
 		}
 		timer := time.NewTimer(200 * time.Millisecond)
