@@ -30,7 +30,7 @@ func (c *Client) Execute(ctx context.Context, action automation.Action) error {
 	case "toggle":
 		_, err := c.Power(ctx, api.PowerRequest{Target: string(action.NodeID), Endpoint: &endpoint, Action: "toggle"})
 		return err
-	case "brightness", "adjust_brightness", "colour_temperature", "warmest_colour_temperature":
+	case "brightness", "adjust_brightness", "colour_temperature", "adjust_colour_temperature", "warmest_colour_temperature", "adjust_colour":
 		return c.executeLighting(ctx, action)
 	default:
 		return fmt.Errorf("unsupported automation action %q", action.Kind)
@@ -72,6 +72,8 @@ func (c *Client) executeLighting(ctx context.Context, action automation.Action) 
 	var attributeID uint32
 	var commandName string
 	var expected int64
+	var expectedHue uint8
+	var expectedSaturation uint8
 	var payload any
 	switch action.Kind {
 	case "brightness", "adjust_brightness":
@@ -116,9 +118,10 @@ func (c *Client) executeLighting(ctx context.Context, action automation.Action) 
 			OptionsMask     int   `json:"optionsMask"`
 			OptionsOverride int   `json:"optionsOverride"`
 		}{expected, 0, 0, 0}
-	case "colour_temperature", "warmest_colour_temperature":
+	case "colour_temperature", "adjust_colour_temperature", "warmest_colour_temperature":
 		clusterID, commandID, attributeID, commandName = clusterColorControl, commandMoveToColorTemperature, attributeColorTemperature, "moveToColorTemperature"
-		if action.Kind == "warmest_colour_temperature" {
+		switch action.Kind {
+		case "warmest_colour_temperature":
 			raw, err := c.readAutomationAttribute(ctx, session, action.NodeID, action.Endpoint, clusterColorControl, attributeColorTempPhysicalMax)
 			if err != nil {
 				return fmt.Errorf("read warmest colour temperature: %w", err)
@@ -128,7 +131,21 @@ func (c *Client) executeLighting(ctx context.Context, action automation.Action) 
 				return errors.New("warmest colour temperature is unavailable")
 			}
 			expected = int64(limit)
-		} else {
+		case "adjust_colour_temperature":
+			if value < -10000 || value > 10000 {
+				return errors.New("colour temperature adjustment is out of range")
+			}
+			current, err := c.readAutomationAttribute(ctx, session, action.NodeID, action.Endpoint, clusterColorControl, attributeColorTemperature)
+			if err != nil {
+				return fmt.Errorf("read current colour temperature: %w", err)
+			}
+			var mireds uint16
+			if json.Unmarshal(current, &mireds) != nil || mireds == 0 {
+				return errors.New("current colour temperature is unknown")
+			}
+			kelvin := max(int64(1000), min(int64(10000), (1_000_000+int64(mireds)/2)/int64(mireds)+value))
+			expected = (1_000_000 + kelvin/2) / kelvin
+		default:
 			if value < 1000 || value > 10000 {
 				return errors.New("colour temperature is out of range")
 			}
@@ -142,7 +159,13 @@ func (c *Client) executeLighting(ctx context.Context, action automation.Action) 
 		} {
 			var limit uint16
 			if raw, found := attributes[fmt.Sprintf("%d/%d/%d", action.Endpoint, clusterID, bound.attribute)]; found && json.Unmarshal(raw, &limit) == nil {
-				if (!bound.outside && expected < int64(limit)) || (bound.outside && expected > int64(limit)) {
+				if action.Kind == "adjust_colour_temperature" {
+					if bound.outside {
+						expected = min(expected, int64(limit))
+					} else {
+						expected = max(expected, int64(limit))
+					}
+				} else if (!bound.outside && expected < int64(limit)) || (bound.outside && expected > int64(limit)) {
 					return fmt.Errorf("colour temperature %d K is outside device range", value)
 				}
 			}
@@ -153,6 +176,40 @@ func (c *Client) executeLighting(ctx context.Context, action automation.Action) 
 			OptionsMask            int   `json:"optionsMask"`
 			OptionsOverride        int   `json:"optionsOverride"`
 		}{expected, 0, 0, 0}
+	case "adjust_colour":
+		clusterID, commandID, attributeID, commandName = clusterColorControl, commandMoveToHueAndSaturation, attributeCurrentHue, "moveToHueAndSaturation"
+		if value < -3600 || value > 3600 {
+			return errors.New("colour adjustment is out of range")
+		}
+		current, err := c.readAutomationAttribute(ctx, session, action.NodeID, action.Endpoint, clusterColorControl, attributeCurrentHue)
+		if err != nil {
+			return fmt.Errorf("read current hue: %w", err)
+		}
+		var hue uint8
+		if json.Unmarshal(current, &hue) != nil {
+			return errors.New("current hue is unknown")
+		}
+		expectedHue = hueAfterDegrees(hue, value)
+		expected = int64(expectedHue)
+		current, err = c.readAutomationAttribute(ctx, session, action.NodeID, action.Endpoint, clusterColorControl, attributeCurrentSaturation)
+		if err != nil {
+			return fmt.Errorf("read current saturation: %w", err)
+		}
+		if json.Unmarshal(current, &expectedSaturation) != nil {
+			return errors.New("current saturation is unknown")
+		}
+		if expectedSaturation < 32 {
+			expectedSaturation = 254
+		} else if expectedSaturation > 254 {
+			expectedSaturation = 254
+		}
+		payload = struct {
+			Hue             uint8 `json:"hue"`
+			Saturation      uint8 `json:"saturation"`
+			TransitionTime  int   `json:"transitionTime"`
+			OptionsMask     int   `json:"optionsMask"`
+			OptionsOverride int   `json:"optionsOverride"`
+		}{expectedHue, expectedSaturation, 0, 0, 0}
 	}
 	if !supportsAutomationCommand(device, action.Endpoint, clusterID, commandID) {
 		return api.ErrUnsupported
@@ -178,7 +235,22 @@ func (c *Client) executeLighting(ctx context.Context, action automation.Action) 
 			return errors.Join(api.ErrUnconfirmed, err)
 		}
 		var got int64
-		if json.Unmarshal(raw, &got) == nil && absAutomation(got-expected) <= 1 {
+		confirmed := json.Unmarshal(raw, &got) == nil && absAutomation(got-expected) <= 1
+		if action.Kind == "adjust_colour" {
+			confirmed = json.Unmarshal(raw, &got) == nil && got >= 0 && got <= 254 && hueDistance(uint8(got), uint8(expected)) <= 2
+			if confirmed {
+				saturation, err := c.readAutomationAttribute(ctx, session, action.NodeID, action.Endpoint, clusterColorControl, attributeCurrentSaturation)
+				if err != nil {
+					return errors.Join(api.ErrUnconfirmed, err)
+				}
+				var gotSaturation uint8
+				confirmed = json.Unmarshal(saturation, &gotSaturation) == nil && absAutomation(int64(gotSaturation)-int64(expectedSaturation)) <= 2
+				if confirmed {
+					c.publishConfirmedAttribute(session, action.NodeID, action.Endpoint, clusterColorControl, attributeCurrentSaturation, saturation)
+				}
+			}
+		}
+		if confirmed {
 			c.publishConfirmedAttribute(session, action.NodeID, action.Endpoint, clusterID, attributeID, raw)
 			return nil
 		}
@@ -228,4 +300,14 @@ func absAutomation(value int64) int64 {
 		return -value
 	}
 	return value
+}
+
+func hueAfterDegrees(hue uint8, degrees int64) uint8 {
+	turn := degrees % 360
+	steps := (absAutomation(turn)*255 + 180) / 360
+	if turn < 0 {
+		steps = -steps
+	}
+	// The modulo result is always in the Matter hue range 0..254.
+	return uint8((int64(hue)%255 + steps + 255) % 255) // #nosec G115
 }

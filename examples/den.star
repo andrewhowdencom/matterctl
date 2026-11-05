@@ -1,8 +1,8 @@
 # Example for the current Den Light, BILRESA scroll wheel, and FP300 sensor.
 # Device labels are exact Matter labels; use a node ID where no label exists.
 den = device("Den Light", endpoint=1)
-bilresa = device("2")
-presence = device("Presence Multi-Sensor FP300")
+bilresa = device("Den Scroll Wheel")
+presence = device("Den Presence Sensor")
 
 def bind_toggle(button, endpoint, light):
     on(short_release(button, endpoint=endpoint), lambda event: [toggle(light)])

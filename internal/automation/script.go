@@ -49,6 +49,8 @@ func Load(ctx context.Context, filename string, source []byte) (*Engine, error) 
 		"brightness":                 starlark.NewBuiltin("brightness", actionBuiltin("brightness")),
 		"adjust_brightness":          starlark.NewBuiltin("adjust_brightness", actionBuiltin("adjust_brightness")),
 		"colour_temperature":         starlark.NewBuiltin("colour_temperature", actionBuiltin("colour_temperature")),
+		"adjust_colour_temperature":  starlark.NewBuiltin("adjust_colour_temperature", actionBuiltin("adjust_colour_temperature")),
+		"adjust_colour":              starlark.NewBuiltin("adjust_colour", actionBuiltin("adjust_colour")),
 		"warmest_colour_temperature": starlark.NewBuiltin("warmest_colour_temperature", actionBuiltin("warmest_colour_temperature")),
 	}
 	thread := &starlark.Thread{Name: "automation registration"}
@@ -179,6 +181,14 @@ func actionBuiltin(kind string) func(*starlark.Thread, *starlark.Builtin, starla
 		case "colour_temperature":
 			if number < 1000 || number > 10000 {
 				return nil, fmt.Errorf("colour temperature must be between 1000 and 10000 kelvin")
+			}
+		case "adjust_colour_temperature":
+			if number < -10000 || number > 10000 {
+				return nil, fmt.Errorf("colour temperature adjustment must be between -10000 and 10000 kelvin")
+			}
+		case "adjust_colour":
+			if number < -3600 || number > 3600 {
+				return nil, fmt.Errorf("colour adjustment must be between -3600 and 3600 degrees")
 			}
 		}
 		return &actionValue{kind: kind, device: ref, value: number}, nil

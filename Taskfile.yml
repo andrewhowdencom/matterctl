@@ -60,15 +60,19 @@ tasks:
       - sudo podman build --tag localhost/matterctl:latest --file Containerfile .
 
   automation:example:
-    desc: Copy the BILRESA and Den example into the XDG automation directory
+    desc: Copy the BILRESA scroll wheel example into the XDG automation directory
     cmds:
       - |
         automation_dir="${XDG_CONFIG_HOME:-$HOME/.config}/matterctl/automations"
-        if test -e "$automation_dir/bilresa-den.star"; then
-          echo "Example already exists: $automation_dir/bilresa-den.star" >&2
+        if test -e "$automation_dir/bilresa-scroll-wheel-lights.star"; then
+          echo "Example already exists: $automation_dir/bilresa-scroll-wheel-lights.star" >&2
           exit 1
         fi
-        install -D -m 0644 examples/bilresa-den.star "$automation_dir/bilresa-den.star"
+        if test -e "$automation_dir/bilresa-den.star"; then
+          echo "Older scroll wheel example exists: $automation_dir/bilresa-den.star; migrate it first to avoid duplicate controls" >&2
+          exit 1
+        fi
+        install -D -m 0644 examples/bilresa-scroll-wheel-lights.star "$automation_dir/bilresa-scroll-wheel-lights.star"
 
   install:
     desc: Validate, mount XDG automations, install the Quadlet, and restart matterctl
