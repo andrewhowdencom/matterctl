@@ -111,8 +111,8 @@ Quadlet generated from `deploy/matterctl.container` at
 `/etc/containers/systemd/matterctl.container`, reloads systemd, and starts or
 restarts `matterctl.service`. Run it again after changes to rebuild and deploy.
 It mounts `${XDG_CONFIG_HOME:-$HOME/.config}/matterctl/automations` read-only
-for service startup. Use `task automation:example` to save the BILRESA and Den
-Light example before installation.
+for service startup. Use `task automation:example` to save the BILRESA scroll
+wheel example, initially bound to Den Light, before installation.
 The Quadlet's `[Install]` section activates the service at boot; do not run
 `systemctl enable` on the generated unit.
 

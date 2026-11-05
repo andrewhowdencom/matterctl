@@ -15,19 +15,20 @@ func TestTwoButtonBilresaRoomBindings(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	source = append(source, []byte("\nbind_room(\"11\", 3, 4, \"21\", 1)\n")...)
+	source = append(source, []byte("\nbind_room(\"11\", 3, 4, [(\"21\", 1), (\"22\", 2)])\n")...)
 	engine, err := Load(t.Context(), "rooms.star", source)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if engine.RuleCount() != 8 {
-		t.Fatalf("registered %d rules, want 8", engine.RuleCount())
+	if engine.RuleCount() != 12 {
+		t.Fatalf("registered %d rules, want 12", engine.RuleCount())
 	}
 	inventory := api.Inventory{Ready: true, Devices: []api.Device{
 		{NodeID: "10", Label: "ROOM_1_BILRESA", Endpoints: []api.Endpoint{{ID: 1}, {ID: 2}}},
 		{NodeID: "20", Label: "ROOM_1_LIGHT", Endpoints: []api.Endpoint{{ID: 1}}},
 		{NodeID: "11", Endpoints: []api.Endpoint{{ID: 3}, {ID: 4}}},
 		{NodeID: "21", Endpoints: []api.Endpoint{{ID: 1}}},
+		{NodeID: "22", Endpoints: []api.Endpoint{{ID: 2}}},
 	}}
 	if _, err := engine.Feed(t.Context(), sampleEvent("inventory", "", inventory)); err != nil {
 		t.Fatal(err)
@@ -45,7 +46,6 @@ func TestTwoButtonBilresaRoomBindings(t *testing.T) {
 		{"off click", "10", 2, 3, "20", []string{"power"}, []any{"off"}},
 		{"on hold", "10", 1, 2, "20", []string{"power", "brightness", "colour_temperature"}, []any{"on", int64(100), int64(5000)}},
 		{"off hold", "10", 2, 2, "20", []string{"power", "brightness", "warmest_colour_temperature"}, []any{"on", int64(1), nil}},
-		{"second room", "11", 4, 3, "21", []string{"power"}, []any{"off"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			event := sampleEvent("node_event", test.node, struct {
@@ -66,6 +66,100 @@ func TestTwoButtonBilresaRoomBindings(t *testing.T) {
 				}
 			}
 		})
+	}
+	event := sampleEvent("node_event", "11", struct {
+		EndpointID uint16 `json:"endpoint_id"`
+		ClusterID  uint32 `json:"cluster_id"`
+		EventID    uint32 `json:"event_id"`
+	}{3, 59, 3})
+	firings, err := engine.Feed(t.Context(), event)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(firings) != 2 || firings[0].Actions[0].NodeID != "21" || firings[1].Actions[0].NodeID != "22" || firings[1].Actions[0].Kind != "power" || firings[1].Actions[0].Value != "on" {
+		t.Fatalf("room actions = %+v", firings)
+	}
+}
+
+func TestScrollWheelBilresaRoomBindings(t *testing.T) {
+	source, err := os.ReadFile("../../examples/bilresa-scroll-wheel-lights.star")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source = append(source, []byte("\nbind_room(\"30\", [(\"31\", 1), (\"32\", 2)], colour=(10, 11, 12), temperature=(13, 14, 15), brightness=(16, 17, 18))\n")...)
+	engine, err := Load(t.Context(), "rooms.star", source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if engine.RuleCount() != 36 {
+		t.Fatalf("registered %d rules, want 36", engine.RuleCount())
+	}
+	inventory := api.Inventory{Ready: true, Devices: []api.Device{
+		{NodeID: "2", Label: "Den Scroll Wheel", Endpoints: []api.Endpoint{{ID: 1}, {ID: 2}, {ID: 3}, {ID: 4}, {ID: 5}, {ID: 6}, {ID: 7}, {ID: 8}, {ID: 9}}},
+		{NodeID: "1", Label: "Den Light", Endpoints: []api.Endpoint{{ID: 1}}},
+		{NodeID: "30", Endpoints: []api.Endpoint{{ID: 10}, {ID: 11}, {ID: 12}, {ID: 13}, {ID: 14}, {ID: 15}, {ID: 16}, {ID: 17}, {ID: 18}}},
+		{NodeID: "31", Endpoints: []api.Endpoint{{ID: 1}}},
+		{NodeID: "32", Endpoints: []api.Endpoint{{ID: 2}}},
+	}}
+	if _, err := engine.Feed(t.Context(), sampleEvent("inventory", "", inventory)); err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		name     string
+		node     api.NodeID
+		endpoint uint16
+		eventID  uint32
+		count    uint8
+		kind     string
+		value    any
+		targets  []api.NodeID
+	}{
+		{"colour up", "30", 10, 3, 0, "adjust_colour", int64(12), []api.NodeID{"31", "32"}},
+		{"colour down", "30", 11, 3, 0, "adjust_colour", int64(-12), []api.NodeID{"31", "32"}},
+		{"temperature up", "30", 13, 3, 0, "adjust_colour_temperature", int64(150), []api.NodeID{"31", "32"}},
+		{"temperature down", "30", 14, 3, 0, "adjust_colour_temperature", int64(-150), []api.NodeID{"31", "32"}},
+		{"brightness up", "30", 16, 3, 0, "adjust_brightness", int64(5), []api.NodeID{"31", "32"}},
+		{"brightness down", "30", 17, 3, 0, "adjust_brightness", int64(-5), []api.NodeID{"31", "32"}},
+		{"single colour", "30", 12, 6, 1, "toggle", nil, []api.NodeID{"31", "32"}},
+		{"single temperature", "30", 15, 6, 1, "toggle", nil, []api.NodeID{"31", "32"}},
+		{"single brightness", "30", 18, 6, 1, "toggle", nil, []api.NodeID{"31", "32"}},
+		{"double colour", "30", 12, 6, 2, "power", "on", []api.NodeID{"31", "32"}},
+		{"double temperature", "30", 15, 6, 2, "power", "on", []api.NodeID{"31", "32"}},
+		{"double brightness", "30", 18, 6, 2, "power", "on", []api.NodeID{"31", "32"}},
+		{"long colour", "30", 12, 2, 0, "power", "off", []api.NodeID{"31", "32"}},
+		{"long temperature", "30", 15, 2, 0, "power", "off", []api.NodeID{"31", "32"}},
+		{"long brightness", "30", 18, 2, 0, "power", "off", []api.NodeID{"31", "32"}},
+		{"original group", "2", 7, 3, 0, "adjust_brightness", int64(5), []api.NodeID{"1"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			firings, err := engine.Feed(t.Context(), sampleEvent("node_event", test.node, struct {
+				EndpointID uint16           `json:"endpoint_id"`
+				ClusterID  uint32           `json:"cluster_id"`
+				EventID    uint32           `json:"event_id"`
+				Data       map[string]uint8 `json:"data,omitempty"`
+			}{test.endpoint, 59, test.eventID, map[string]uint8{"totalNumberOfPressesCounted": test.count}}))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(firings) != len(test.targets) {
+				t.Fatalf("firings = %+v", firings)
+			}
+			for i, firing := range firings {
+				if len(firing.Actions) != 1 || firing.Actions[0].NodeID != test.targets[i] || firing.Actions[0].Kind != test.kind || firing.Actions[0].Value != test.value {
+					t.Fatalf("firing %d = %+v", i, firing)
+				}
+			}
+		})
+	}
+	for _, endpoint := range []uint16{12, 15, 18} {
+		firings, err := engine.Feed(t.Context(), sampleEvent("node_event", "30", struct {
+			EndpointID uint16 `json:"endpoint_id"`
+			ClusterID  uint32 `json:"cluster_id"`
+			EventID    uint32 `json:"event_id"`
+		}{endpoint, 59, 3}))
+		if err != nil || len(firings) != 0 {
+			t.Fatalf("short release on endpoint %d fired %+v: %v", endpoint, firings, err)
+		}
 	}
 }
 

@@ -18,7 +18,7 @@ func TestExecuteAutomationUsesAdvertisedCommandsAndFreshReads(t *testing.T) {
 	n := fixtureNode(t, "1", "Den Light")
 	n.Attributes["1/29/1"] = json.RawMessage(`[29,6,8,768]`)
 	n.Attributes["1/8/65529"] = json.RawMessage(`[4]`)
-	n.Attributes["1/768/65529"] = json.RawMessage(`[10]`)
+	n.Attributes["1/768/65529"] = json.RawMessage(`[10,6]`)
 	n.Attributes["1/768/7"] = json.RawMessage(`250`)
 	n.Attributes["1/768/16395"] = json.RawMessage(`154`)
 	n.Attributes["1/768/16396"] = json.RawMessage(`454`)
@@ -36,7 +36,7 @@ func TestExecuteAutomationUsesAdvertisedCommandsAndFreshReads(t *testing.T) {
 		if wsjson.Read(ctx, conn, &request) != nil || writeResult(ctx, conn, request.MessageID, []node{n}) != nil {
 			return
 		}
-		power, level, mireds := false, int64(42), int64(250)
+		power, level, mireds, hue, saturation := false, int64(42), int64(250), int64(50), int64(0)
 		for wsjson.Read(ctx, conn, &request) == nil {
 			switch request.Command {
 			case "read_attribute":
@@ -57,6 +57,10 @@ func TestExecuteAutomationUsesAdvertisedCommandsAndFreshReads(t *testing.T) {
 					value = mireds
 				case "1/768/16396":
 					value = 454
+				case "1/768/0":
+					value = hue
+				case "1/768/1":
+					value = saturation
 				default:
 					t.Errorf("unexpected read path %s", args.AttributePath)
 					return
@@ -90,6 +94,12 @@ func TestExecuteAutomationUsesAdvertisedCommandsAndFreshReads(t *testing.T) {
 						return
 					}
 					mireds = value
+				case "moveToHueAndSaturation":
+					if json.Unmarshal(args.Payload["hue"], &value) != nil || json.Unmarshal(args.Payload["saturation"], &saturation) != nil {
+						t.Error("missing hue or saturation")
+						return
+					}
+					hue = value
 				default:
 					t.Errorf("unexpected command %s", args.CommandName)
 					return
@@ -117,7 +127,10 @@ func TestExecuteAutomationUsesAdvertisedCommandsAndFreshReads(t *testing.T) {
 		{Kind: "brightness", NodeID: "1", Endpoint: 1, Value: int64(50)},
 		{Kind: "adjust_brightness", NodeID: "1", Endpoint: 1, Value: int64(10)},
 		{Kind: "colour_temperature", NodeID: "1", Endpoint: 1, Value: int64(5000)},
+		{Kind: "adjust_colour_temperature", NodeID: "1", Endpoint: 1, Value: int64(150)},
+		{Kind: "adjust_colour_temperature", NodeID: "1", Endpoint: 1, Value: int64(10000)},
 		{Kind: "warmest_colour_temperature", NodeID: "1", Endpoint: 1},
+		{Kind: "adjust_colour", NodeID: "1", Endpoint: 1, Value: int64(12)},
 	} {
 		if err := c.Execute(t.Context(), action); err != nil {
 			t.Fatalf("execute %s: %v", action.Kind, err)
@@ -125,8 +138,26 @@ func TestExecuteAutomationUsesAdvertisedCommandsAndFreshReads(t *testing.T) {
 	}
 	mu.Lock()
 	defer mu.Unlock()
-	if len(commands) != 5 || commands[0].cluster != 6 || commands[0].name != "toggle" || commands[1].value != 127 || commands[2].value != 152 || commands[3].cluster != 768 || commands[3].value != 200 || commands[4].value != 454 {
+	if len(commands) != 8 || commands[0].cluster != 6 || commands[0].name != "toggle" || commands[1].value != 127 || commands[2].value != 152 || commands[3].cluster != 768 || commands[3].value != 200 || commands[4].value != 194 || commands[5].value != 154 || commands[6].value != 454 || commands[7].name != "moveToHueAndSaturation" || commands[7].value != 59 {
 		t.Fatalf("unexpected Matter commands: %+v", commands)
+	}
+}
+
+func TestHueAfterDegreesWraps(t *testing.T) {
+	for _, test := range []struct {
+		hue     uint8
+		degrees int64
+		want    uint8
+	}{
+		{50, 12, 59},
+		{250, 12, 4},
+		{4, -12, 250},
+		{50, 360, 50},
+		{50, -720, 50},
+	} {
+		if got := hueAfterDegrees(test.hue, test.degrees); got != test.want {
+			t.Errorf("hueAfterDegrees(%d, %d) = %d, want %d", test.hue, test.degrees, got, test.want)
+		}
 	}
 }
 
