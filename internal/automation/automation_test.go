@@ -44,7 +44,7 @@ func TestTwoButtonBilresaRoomBindings(t *testing.T) {
 	}{
 		{"on click", "10", 1, 3, "20", []string{"power"}, []any{"on"}},
 		{"off click", "10", 2, 3, "20", []string{"power"}, []any{"off"}},
-		{"on hold", "10", 1, 2, "20", []string{"power", "brightness", "colour_temperature"}, []any{"on", int64(100), int64(5000)}},
+		{"on hold", "10", 1, 2, "20", []string{"power", "brightness", "colour_temperature"}, []any{"on", int64(100), int64(4000)}},
 		{"off hold", "10", 2, 2, "20", []string{"power", "brightness", "warmest_colour_temperature"}, []any{"on", int64(1), nil}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -110,26 +110,26 @@ func TestScrollWheelBilresaRoomBindings(t *testing.T) {
 		endpoint uint16
 		eventID  uint32
 		count    uint8
-		kind     string
-		value    any
+		kinds    []string
+		values   []any
 		targets  []api.NodeID
 	}{
-		{"colour up", "30", 10, 3, 0, "adjust_colour", int64(12), []api.NodeID{"31", "32"}},
-		{"colour down", "30", 11, 3, 0, "adjust_colour", int64(-12), []api.NodeID{"31", "32"}},
-		{"temperature up", "30", 13, 3, 0, "adjust_colour_temperature", int64(150), []api.NodeID{"31", "32"}},
-		{"temperature down", "30", 14, 3, 0, "adjust_colour_temperature", int64(-150), []api.NodeID{"31", "32"}},
-		{"brightness up", "30", 16, 3, 0, "adjust_brightness", int64(5), []api.NodeID{"31", "32"}},
-		{"brightness down", "30", 17, 3, 0, "adjust_brightness", int64(-5), []api.NodeID{"31", "32"}},
-		{"single colour", "30", 12, 6, 1, "toggle", nil, []api.NodeID{"31", "32"}},
-		{"single temperature", "30", 15, 6, 1, "toggle", nil, []api.NodeID{"31", "32"}},
-		{"single brightness", "30", 18, 6, 1, "toggle", nil, []api.NodeID{"31", "32"}},
-		{"double colour", "30", 12, 6, 2, "power", "on", []api.NodeID{"31", "32"}},
-		{"double temperature", "30", 15, 6, 2, "power", "on", []api.NodeID{"31", "32"}},
-		{"double brightness", "30", 18, 6, 2, "power", "on", []api.NodeID{"31", "32"}},
-		{"long colour", "30", 12, 2, 0, "power", "off", []api.NodeID{"31", "32"}},
-		{"long temperature", "30", 15, 2, 0, "power", "off", []api.NodeID{"31", "32"}},
-		{"long brightness", "30", 18, 2, 0, "power", "off", []api.NodeID{"31", "32"}},
-		{"original group", "2", 7, 3, 0, "adjust_brightness", int64(5), []api.NodeID{"1"}},
+		{"colour up", "30", 10, 3, 0, []string{"adjust_colour"}, []any{int64(12)}, []api.NodeID{"31", "32"}},
+		{"colour down", "30", 11, 3, 0, []string{"adjust_colour"}, []any{int64(-12)}, []api.NodeID{"31", "32"}},
+		{"temperature up", "30", 13, 3, 0, []string{"adjust_colour_temperature"}, []any{int64(150)}, []api.NodeID{"31", "32"}},
+		{"temperature down", "30", 14, 3, 0, []string{"adjust_colour_temperature"}, []any{int64(-150)}, []api.NodeID{"31", "32"}},
+		{"brightness up", "30", 16, 3, 0, []string{"adjust_brightness"}, []any{int64(5)}, []api.NodeID{"31", "32"}},
+		{"brightness down", "30", 17, 3, 0, []string{"adjust_brightness"}, []any{int64(-5)}, []api.NodeID{"31", "32"}},
+		{"single colour", "30", 12, 6, 1, []string{"toggle"}, []any{nil}, []api.NodeID{"31", "32"}},
+		{"single temperature", "30", 15, 6, 1, []string{"toggle"}, []any{nil}, []api.NodeID{"31", "32"}},
+		{"single brightness", "30", 18, 6, 1, []string{"toggle"}, []any{nil}, []api.NodeID{"31", "32"}},
+		{"double colour", "30", 12, 6, 2, []string{"power", "brightness", "warmest_colour_temperature"}, []any{"on", int64(1), nil}, []api.NodeID{"31", "32"}},
+		{"double temperature", "30", 15, 6, 2, []string{"power", "brightness", "warmest_colour_temperature"}, []any{"on", int64(1), nil}, []api.NodeID{"31", "32"}},
+		{"double brightness", "30", 18, 6, 2, []string{"power", "brightness", "warmest_colour_temperature"}, []any{"on", int64(1), nil}, []api.NodeID{"31", "32"}},
+		{"long colour", "30", 12, 2, 0, []string{"power", "brightness", "colour_temperature"}, []any{"on", int64(100), int64(4000)}, []api.NodeID{"31", "32"}},
+		{"long temperature", "30", 15, 2, 0, []string{"power", "brightness", "colour_temperature"}, []any{"on", int64(100), int64(4000)}, []api.NodeID{"31", "32"}},
+		{"long brightness", "30", 18, 2, 0, []string{"power", "brightness", "colour_temperature"}, []any{"on", int64(100), int64(4000)}, []api.NodeID{"31", "32"}},
+		{"original group", "2", 7, 3, 0, []string{"adjust_brightness"}, []any{int64(5)}, []api.NodeID{"1"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			firings, err := engine.Feed(t.Context(), sampleEvent("node_event", test.node, struct {
@@ -145,8 +145,13 @@ func TestScrollWheelBilresaRoomBindings(t *testing.T) {
 				t.Fatalf("firings = %+v", firings)
 			}
 			for i, firing := range firings {
-				if len(firing.Actions) != 1 || firing.Actions[0].NodeID != test.targets[i] || firing.Actions[0].Kind != test.kind || firing.Actions[0].Value != test.value {
+				if len(firing.Actions) != len(test.kinds) {
 					t.Fatalf("firing %d = %+v", i, firing)
+				}
+				for j, action := range firing.Actions {
+					if action.NodeID != test.targets[i] || action.Kind != test.kinds[j] || action.Value != test.values[j] {
+						t.Fatalf("firing %d action %d = %+v", i, j, action)
+					}
 				}
 			}
 		})

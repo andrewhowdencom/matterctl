@@ -10,7 +10,7 @@ def bind_light(button, on_endpoint, off_endpoint, light):
        lambda event: [
            power(light, "on"),
            brightness(light, 100),
-           colour_temperature(light, 5000),
+           colour_temperature(light, 4000),
        ])
     on(long_press(button, endpoint=off_endpoint),
        lambda event: [
