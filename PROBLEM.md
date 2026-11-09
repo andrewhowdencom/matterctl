@@ -15,6 +15,9 @@ operational complexity than the job requires.
 
 - The project began with the owner's experience of slow light control through
   Google Home and limits in its automations and sensor support.
+- After using local control, the owner observed the physical light change in
+  roughly 100 ms, compared with seconds previously through Google Home. This is
+  an informal estimate, not a timed comparison.
 - Home Assistant was considered as a possible solution, but its breadth and
   conceptual complexity were a poor fit for the owner's desired scope.
 - Matter-only control is the proposed approach. Whether it is sufficient for
@@ -33,6 +36,7 @@ These are dimensions to observe, not targets established in advance:
 - The effort required to add a device, understand its capabilities, create an
   automation, and keep the system running.
 
-The owner's observations establish the starting problem. Comparative latency,
-the full set of desired automations and sensors, and an acceptable complexity
-level have not yet been measured or defined.
+The owner's observations establish the starting problem and suggest a substantial
+improvement in response time. A repeatable latency comparison, the full set of
+desired automations and sensors, and an acceptable complexity level have not yet
+been measured or defined.
