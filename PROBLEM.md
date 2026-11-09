@@ -1,42 +1,52 @@
 # Problem
 
-I want to control the lights in my home promptly and locally, and build
-automations that can use the sensors and behaviors I care about. My existing
-options leave a gap: Google Home feels too slow for light control and does not
-offer the automation flexibility or sensor support I want. Home Assistant could
-address some of those needs, but its broad integration model feels too complex
-for a home where I want to work directly with Matter devices.
+In everyday situations, getting the house to do what I need takes more attention
+or movement than I want. I may be holding the baby and need to set the lights,
+or be in bed and want to turn one off. I want the house to respond appropriately
+when it can, and to be easy to direct and configure when it cannot. The effort,
+equipment, and complexity involved should be justified by the usefulness I get
+back.
 
-This is the problem matterctl is exploring: how to get responsive local control
-and useful sensor-driven automation without taking on more concepts and
-operational complexity than the job requires.
+## Subproblems
 
-## What we know
+1. **Getting the right response in the moment takes too much effort.** A control
+   may be out of reach when my hands are occupied or I am in bed. A response
+   that takes seconds interrupts the moment even when I can issue a command.
+2. **The house does not always respond to useful context.** I want to define
+   behaviors using the lights and sensors that matter to me. Google Home's
+   automation and sensor support did not let me express everything I wanted.
+3. **Configuring and understanding the house can take too much effort.** Home
+   Assistant offered a possible way to build the behaviors, but its breadth
+   felt conceptually too complex for what I wanted. As this project grows, the
+   effort of finding devices, changing rules, and understanding outcomes also
+   needs attention. Seeing lights by room is a candidate need within this
+   subproblem; its practical impact has not yet been established.
 
-- The project began with the owner's experience of slow light control through
-  Google Home and limits in its automations and sensor support.
-- After using local control, the owner observed the physical light change in
-  roughly 100 ms, compared with seconds previously through Google Home. This is
-  an informal estimate, not a timed comparison.
-- Home Assistant was considered as a possible solution, but its breadth and
-  conceptual complexity were a poor fit for the owner's desired scope.
-- Matter-only control is the proposed approach. Whether it is sufficient for
-  the devices and automations the owner ultimately wants remains to be tested.
+These subproblems describe different sources of effort beneath the same
+household problem. They can be tested separately without treating any one
+control system or interface as inevitable.
+
+## Evidence so far
+
+- The baby and bed situations are the owner's examples of when convenient
+  response matters.
+- Google Home light changes previously felt seconds long. After using local
+  control, the owner observed the physical light change in roughly 100 ms. This
+  is an informal estimate, not a timed comparison.
+- The owner found Home Assistant conceptually heavy and Google Home too limited
+  for the desired automations and sensors. The exact behaviors and sensor set
+  still need to be described.
 
 ## How to assess progress
 
-These are dimensions to observe, not targets established in advance:
+For representative household situations, observe how often a person must stop,
+reach, get up, or repeat an action; how long the house takes to respond; and
+whether the response is appropriate. Compare those gains with the effort of
+setting up, understanding, and maintaining the solution and with any extra
+equipment it requires. The room-view and automation-operability proposals need
+their own task-level evidence of reduced effort.
 
-- Time from requesting a light action to observing the device's reported state,
-  alongside whether the physical light responds.
-- Whether the desired automations can be expressed and run reliably using the
-  available Matter events, attributes, and commands.
-- Whether the sensors the owner wants to use expose the needed data to those
-  automations.
-- The effort required to add a device, understand its capabilities, create an
-  automation, and keep the system running.
-
-The owner's observations establish the starting problem and suggest a substantial
-improvement in response time. A repeatable latency comparison, the full set of
-desired automations and sensors, and an acceptable complexity level have not yet
-been measured or defined.
+A lamp, different switch wiring, Google Home, Home Assistant, and a Matter
+controller are all possible approaches to parts of this problem. Local control
+and a Matter-only model are the current project's choices, not the problem
+itself.
