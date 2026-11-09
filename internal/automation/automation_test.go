@@ -233,6 +233,50 @@ func TestRulesPreviewPresenceWheelAndButton(t *testing.T) {
 	}
 }
 
+func TestDenPresenceOnOffEdges(t *testing.T) {
+	source, err := os.ReadFile("../../examples/den-presence.star")
+	if err != nil {
+		t.Fatal(err)
+	}
+	engine, err := Load(t.Context(), "den-presence.star", source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if engine.RuleCount() != 2 {
+		t.Fatalf("registered %d rules, want 2", engine.RuleCount())
+	}
+	inventory := sampleInventoryData(true)
+	inventory.Devices[2].Label = "Den Presence Sensor"
+	if firings, err := engine.Feed(t.Context(), sampleEvent("inventory", "", inventory)); err != nil || len(firings) != 0 {
+		t.Fatalf("initial occupied inventory fired %v, error %v", firings, err)
+	}
+	for _, test := range []struct {
+		occupied bool
+		kind     string
+		power    string
+	}{
+		{true, "", ""},
+		{false, "occupancy.exit", "off"},
+		{false, "", ""},
+		{true, "occupancy.enter", "on"},
+		{true, "", ""},
+	} {
+		firings, err := engine.Feed(t.Context(), occupancyUpdate(test.occupied))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if test.kind == "" {
+			if len(firings) != 0 {
+				t.Fatalf("unchanged occupancy fired %+v", firings)
+			}
+			continue
+		}
+		if len(firings) != 1 || firings[0].Signal.Kind != test.kind || len(firings[0].Actions) != 1 || firings[0].Actions[0].Kind != "power" || firings[0].Actions[0].NodeID != "1" || firings[0].Actions[0].Endpoint != 1 || firings[0].Actions[0].Value != test.power {
+			t.Fatalf("occupancy=%v fired %+v, want %s power %s", test.occupied, firings, test.kind, test.power)
+		}
+	}
+}
+
 func TestSwitchPrimitivesSeparateImmediateReleaseFromCompletedGesture(t *testing.T) {
 	engine, err := Load(t.Context(), "switch.star", []byte(`
 light = device("Den Light", endpoint=1)
