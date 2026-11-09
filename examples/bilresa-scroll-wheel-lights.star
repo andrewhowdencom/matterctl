@@ -1,15 +1,23 @@
 # Bind one BILRESA scroll wheel to a room of lights. The three LED groups
 # select which property the wheel changes. A single click toggles each light,
-# a double click turns them all on, and a long press turns them all off.
+# a double click sets night mode, and a long press restores bright warm light.
 # Verify the switch's endpoint IDs with event watch.
 
 def bind_button(button, endpoint, light):
     on(single_press(button, endpoint=endpoint),
        lambda event: [toggle(light)])
     on(double_press(button, endpoint=endpoint),
-       lambda event: [power(light, "on")])
+       lambda event: [
+           power(light, "on"),
+           brightness(light, 1),
+           warmest_colour_temperature(light),
+       ])
     on(long_press(button, endpoint=endpoint),
-       lambda event: [power(light, "off")])
+       lambda event: [
+           power(light, "on"),
+           brightness(light, 100),
+           colour_temperature(light, 4000),
+       ])
 
 def bind_light(button, light, colour, temperature, brightness):
     bind_button(button, colour[2], light)

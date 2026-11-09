@@ -9,8 +9,9 @@ restart. The configured directory can be changed with
 
 The scroll-wheel BILRESA example binds Den Scroll Wheel to Den Light. The three
 LED groups select colour, white temperature, and brightness. In any group, a
-single wheel click toggles each light, a double click turns them all on, and
-a long press turns them all off. Each wheel step changes hue by 12 degrees, white
+single wheel click toggles each light, a double click sets night mode at 1%
+and the light's warmest colour temperature, and a long press sets it to 100%
+at 4000 K. Each wheel step changes hue by 12 degrees, white
 temperature by 150 K, or brightness by five percentage points. Group 3 retains
 the existing brightness mapping on endpoints 7, 8, and 9. The current Den
 Scroll Wheel inventory reports groups 1 and 2 on endpoints 1–3 and 4–6.
@@ -58,10 +59,10 @@ one switch to a list of lights. Additional calls can connect more rooms. Inspect
 the two button switch and observe its events to identify which endpoint is On
 and which is Off; do not use the scroll wheel example's endpoints. A short
 release powers all listed lights on or off. Holding On powers them on at 100%
-and 5000 K. Holding Off powers them on at 1% and each light's advertised
+and 4000 K. Holding Off powers them on at 1% and each light's advertised
 warmest colour temperature. The warmest action reads the light's physical
 maximum mired value
-when triggered. If the light does not support 5000 K or does not advertise its
+when triggered. If the light does not support 4000 K or does not advertise its
 warm limit, that temperature action reports an error in the service log.
 
 To configure it on the installed host, first run `./bin/matterctl device list`
