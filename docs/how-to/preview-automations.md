@@ -110,6 +110,20 @@ syntax and rule registration; `watch` and `replay` also resolve devices and
 endpoints against inventory. These commands do not verify that a target
 advertises the commands needed to carry out an action.
 
+For Den Light and the FP300 presence sensor, save
+[`den-presence.star`](../../examples/den-presence.star) in the automation
+directory. It powers the light on when occupancy begins and off when occupancy
+clears. It does not change brightness or colour. The sensor's own occupancy
+hold time determines how long the light remains on after the room is vacated.
+This rule can turn the light off after a manual switch action if the sensor
+subsequently reports unoccupied.
+
+```sh
+automation_dir="${XDG_CONFIG_HOME:-$HOME/.config}/matterctl/automations"
+install -D -m 0644 examples/den-presence.star "$automation_dir/den-presence.star"
+task install
+```
+
 The separate [`den.star`](../../examples/den.star) example registers three rules:
 
 ```python
@@ -119,9 +133,10 @@ on(wheel_step(bilresa, up=7, down=8),
 bind_toggle(bilresa, 9, den)
 ```
 
-`occupied` fires when a reported occupancy state changes from false to true.
-An initial snapshot, including one that is already occupied, sets the baseline
-without firing. `short_release` fires as soon as the Matter Switch ShortRelease
+`occupied` fires when a reported occupancy state changes from false to true;
+`unoccupied` fires when it changes from true to false. An initial snapshot,
+including one that is already occupied, sets the baseline without firing.
+`short_release` fires as soon as the Matter Switch ShortRelease
 event arrives; `short_press` is a compatible alias. It can also fire during a
 double press. `single_press` and `double_press` distinguish final counts of one
 and two using MultiPressComplete, so they wait for the gesture to finish. The

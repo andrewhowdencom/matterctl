@@ -36,6 +36,7 @@ func Load(ctx context.Context, filename string, source []byte) (*Engine, error) 
 	predeclared := starlark.StringDict{
 		"device":                     starlark.NewBuiltin("device", e.device),
 		"occupied":                   starlark.NewBuiltin("occupied", triggerBuiltin("occupancy.enter")),
+		"unoccupied":                 starlark.NewBuiltin("unoccupied", triggerBuiltin("occupancy.exit")),
 		"short_press":                starlark.NewBuiltin("short_press", triggerBuiltin("button.short_press")),
 		"short_release":              starlark.NewBuiltin("short_release", triggerBuiltin("button.short_press")),
 		"single_press":               starlark.NewBuiltin("single_press", triggerBuiltin("button.single_press")),

@@ -79,10 +79,14 @@ func (e *Engine) Feed(ctx context.Context, event api.Event) ([]Firing, error) {
 		key := occupancyKey{node: event.NodeID, endpoint: uint16(endpoint)}
 		previous, known := e.occupancy[key]
 		e.occupancy[key] = occupied
-		if !known || previous || !occupied {
+		if !known || previous == occupied {
 			return nil, nil
 		}
-		return e.fire(ctx, Signal{Kind: "occupancy.enter", NodeID: event.NodeID, Endpoint: uint16(endpoint), ObservedAt: event.ObservedAt})
+		kind := "occupancy.exit"
+		if occupied {
+			kind = "occupancy.enter"
+		}
+		return e.fire(ctx, Signal{Kind: kind, NodeID: event.NodeID, Endpoint: uint16(endpoint), ObservedAt: event.ObservedAt})
 	case "node_event":
 		if !e.ready {
 			return nil, nil
