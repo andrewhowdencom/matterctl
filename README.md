@@ -10,6 +10,8 @@ It can also add an already-networked Matter device using a fresh sharing code.
 
 See the [implementation plan](PLAN.md) for the agreed direction, proposed
 commands, and milestones toward controlling the first light.
+See the [problem hierarchy](PROBLEM.md) for the household need that motivated
+the project and its more specific problems.
 See [browser requirements](WEB_REQUIREMENTS.md) for the first device-list screen.
 See [user documentation](docs/index.md) for connection checks and the API
 reference, and [architecture](ARCHITECTURE.md) for application boundaries.

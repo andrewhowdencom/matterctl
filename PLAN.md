@@ -2,7 +2,8 @@
 
 Status: implemented and technically validated, 2026-11-02. Real-device
 commissioning, Matter label writing, and named on/off commands succeeded.
-Physical light response and continued Google Home operation await observation.
+The owner has since observed physical light response. Continued Google Home
+operation after sharing still awaits observation.
 
 ## First milestone
 
@@ -230,8 +231,10 @@ corrected.
 On 2026-11-02, `device power on 1 --endpoint 1` returned a fresh-read
 confirmation. Subsequently, `on`, `off`, and `on` commands each returned
 fresh-read confirmation for the same endpoint through an application alias
-that has since been removed at the user's request. Physical illumination remains
-to be confirmed by the user.
+that has since been removed at the user's request. On 2026-11-09, the owner
+reported that physical light changes through local control felt near-instant
+(roughly 100 ms), versus seconds previously through Google Home. This was an
+informal estimate, not a timed benchmark.
 
 ### 6. Validate and document the complete workflow
 
