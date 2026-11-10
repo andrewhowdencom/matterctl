@@ -12,20 +12,28 @@ broad model conceptually too complex. This project's rule files also require
 editing, checking, and restarting the service to activate a change. The effort
 saved by a simpler rule-management workflow has not yet been tested.
 
+Measure the steps and elapsed time from deciding on a rule change to observing
+the new behavior; no baseline has been recorded.
+
 ## Finding devices
 
 The owner would like to see lights room by room. This suggests that a
 device-first list may become hard to navigate as the home grows. The practical
 cost of locating lights in the current view has not yet been established.
 
-## Understanding outcomes
+Measure time and navigation steps to find and control a chosen room's light;
+no baseline has been recorded.
 
-Live automation outcomes currently appear in the service log. A way to see
-which rule ran and what happened is a candidate way to reduce diagnostic
-effort; its benefit still needs to be observed.
+## More specific problem
 
-## How to assess progress
+- [Explaining an unexpected automation outcome](automation-outcome-explanation.md):
+  the owner needs to discover why Den Light turned off without searching
+  service logs.
 
-Observe the time and steps needed to find the right devices, create or change a
-behavior, and explain an unexpected result. Include ongoing maintenance and
-extra equipment when comparing approaches.
+## Measures
+
+Measure the time and steps needed to find the right device, create or change a
+behavior, and explain an unexpected result. Include monthly maintenance time
+and extra equipment when comparing approaches. The owner has reported Home
+Assistant's conceptual complexity and the current rule-edit/restart steps;
+none of these task times has a measured baseline yet.

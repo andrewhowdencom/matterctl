@@ -16,14 +16,26 @@ responses or too much upkeep can erase the gain.
 
 Each linked problem can contain more specific problems. The links express the
 hierarchy; the examples and evidence live with the problem they support.
+Link a proposed feature from the most specific problem it should address,
+stating whether it should resolve, reduce, or only help diagnose that problem.
+Feature design and delivery details belong in the relevant pull request;
+implemented behavior belongs in user documentation.
 
-## Assessing the root problem
+## Measuring the root problem
 
-In representative household situations, observe whether the house reaches a
-useful state, how much interruption a solution avoids, and how often it acts at
-the wrong time. Compare those gains with the equipment, configuration, and
-upkeep each approach adds. The examples so far come from the owner; other
-household needs require their own evidence.
+For each recurring household situation, record the number of times the house
+reaches the useful state, interruptions or manual recovery actions per
+occurrence, time from a request to the physical result where applicable, and
+unwanted responses per week. Compare those gains with time spent configuring
+and maintaining the approach and any additional equipment. Record a baseline
+before claiming improvement; the current examples are qualitative accounts
+from the owner, not a measured household baseline. Other household members'
+needs require their own evidence.
+
+Every linked problem should state an observable situation and consequence, a
+measure that could change, and the current baseline or the fact that it is not
+yet known. A feature succeeds only if the measure improves without adding
+more interruption or upkeep than it removes.
 
 A lamp, different switch wiring, Google Home, Home Assistant, and a Matter
 controller are all possible approaches to parts of this problem. Local control
