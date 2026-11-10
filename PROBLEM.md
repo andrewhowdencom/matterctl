@@ -1,16 +1,14 @@
 # Household problem
 
-In everyday situations, I have to interrupt what I am doing to make the house
-fit what I need. I may be holding the baby and need to set the lights, or be in
-bed and want to turn one off. I want the house to respond appropriately on its
-own where possible and be easy to direct when needed. An approach should save
-more attention and effort than it adds through equipment, configuration, and
-upkeep.
+In recurring situations, the house does not always meet the household's needs
+with little effort. Getting the right outcome can require interruption,
+movement, waiting, or remembering an action. Automation can help, but wrong
+responses or too much upkeep can erase the gain.
 
 ## Subproblems
 
 - [Getting a response when needed](docs/problems/access-and-timing.md): a
-  control is hard to reach or a requested change takes too long.
+  needed change is awkward to request, slow to take effect, or forgotten.
 - [Getting a response that fits](docs/problems/contextual-response.md): the
   house lacks the cues or behavior needed to respond appropriately.
 - [Keeping the house manageable](docs/problems/management-overhead.md): finding
@@ -21,9 +19,11 @@ hierarchy; the examples and evidence live with the problem they support.
 
 ## Assessing the root problem
 
-In representative household situations, observe how often someone must
-interrupt what they are doing, how much effort a solution saves, and how much
-equipment, configuration, and upkeep it adds.
+In representative household situations, observe whether the house reaches a
+useful state, how much interruption a solution avoids, and how often it acts at
+the wrong time. Compare those gains with the equipment, configuration, and
+upkeep each approach adds. The examples so far come from the owner; other
+household needs require their own evidence.
 
 A lamp, different switch wiring, Google Home, Home Assistant, and a Matter
 controller are all possible approaches to parts of this problem. Local control

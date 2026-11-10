@@ -12,6 +12,10 @@ access to a wider range of sensor information. The specific household behaviors
 and sensor inputs still need to be described before this problem can be tested
 against an implementation.
 
+Settling the baby involves dimming lights as a sleep cue and starting music,
+which Google Home currently handles. This is one household outcome spanning
+different devices; it does not require one controller to provide every part.
+
 ## Unwanted responses
 
 An automatic action at the wrong time would create another interruption. This
