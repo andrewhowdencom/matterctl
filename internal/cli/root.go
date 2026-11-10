@@ -47,12 +47,13 @@ func NewCommand() (*cobra.Command, error) {
 	root.PersistentFlags().String("log-level", "info", "Log level: debug, info, warn, or error")
 	root.PersistentFlags().String("server.url", "http://127.0.0.1:8081", "matterctl service URL (MATTERCTL_SERVER_URL)")
 	root.PersistentFlags().String("automation.directory", filepath.Join(xdg.ConfigHome, "matterctl", "automations"), "Starlark rule directory (MATTERCTL_AUTOMATION_DIRECTORY)")
+	root.PersistentFlags().String("history.path", filepath.Join(xdg.StateHome, "matterctl", "history.db"), "Durable history database (MATTERCTL_HISTORY_PATH)")
 	root.PersistentFlags().Duration("request.timeout", 5*time.Second, "CLI request deadline (MATTERCTL_REQUEST_TIMEOUT)")
 	root.PersistentFlags().String("output", "text", "Output format: text or json (MATTERCTL_OUTPUT)")
 	if err := config.BindPFlag("log.level", root.PersistentFlags().Lookup("log-level")); err != nil {
 		return nil, fmt.Errorf("bind log level: %w", err)
 	}
-	for _, name := range []string{"server.url", "automation.directory", "request.timeout", "output"} {
+	for _, name := range []string{"server.url", "automation.directory", "history.path", "request.timeout", "output"} {
 		if err := config.BindPFlag(name, root.PersistentFlags().Lookup(name)); err != nil {
 			return nil, fmt.Errorf("bind %s: %w", name, err)
 		}
@@ -64,7 +65,7 @@ func NewCommand() (*cobra.Command, error) {
 		Example: "  matterctl serve\n  matterctl serve --http.address 127.0.0.1:8081",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return app.Serve(cmd.Context(), config.GetString("http.address"), config.GetString("matter.url"), config.GetString("automation.directory"), logger)
+			return app.Serve(cmd.Context(), config.GetString("http.address"), config.GetString("matter.url"), config.GetString("automation.directory"), config.GetString("history.path"), logger)
 		},
 	}
 	serve.Flags().String("http.address", ":8081", "HTTP listen address (MATTERCTL_HTTP_ADDRESS)")
@@ -75,7 +76,7 @@ func NewCommand() (*cobra.Command, error) {
 	if err := config.BindPFlag("matter.url", serve.Flags().Lookup("matter.url")); err != nil {
 		return nil, fmt.Errorf("bind Matter Server URL: %w", err)
 	}
-	root.AddCommand(serverCommand(config), deviceCommand(config), eventCommand(config), automationCommand(config))
+	root.AddCommand(serverCommand(config), deviceCommand(config), eventCommand(config), automationCommand(config), historyCommand(config))
 	root.AddCommand(serve, &cobra.Command{
 		Use:   "version",
 		Short: "Print the build version",

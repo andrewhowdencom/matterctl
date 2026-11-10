@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f4ee">
+  <title>History · matterctl</title>
+  <link rel="stylesheet" href="/app.css">
+  <link rel="stylesheet" href="/history.css">
+  <script type="module" src="/history.mjs"></script>
+</head>
+<body>
+  <div class="page-shell">
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="matterctl home">
+        <span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span><span></span></span>
+        <span>matterctl</span>
+      </a>
+      <nav aria-label="Main navigation"><a href="/">Devices</a> <a href="/history" aria-current="page">History &amp; automations</a></nav>
+    </header>
+    <main>
+      <section class="intro">
+        <div>
+          <p class="eyebrow">Household activity</p>
+          <h1>History<span class="title-dot">.</span></h1>
+          <p class="intro-copy">Meaningful changes matterctl observed and actions it took. The last seven days appear by default; older records remain available.</p>
+        </div>
+      </section>
+      <section class="activity-section" aria-labelledby="history-title">
+        <div class="section-heading">
+          <div><p class="eyebrow">Across the house</p><h2 id="history-title">Timeline</h2></div>
+          <span id="recording" role="status" aria-live="polite">Loading…</span>
+        </div>
+        <form id="filters" class="history-filters">
+          <label>From <input name="since" type="datetime-local"></label>
+          <label>Until <input name="until" type="datetime-local"></label>
+          <label>Device <input name="device" list="known-devices" placeholder="Node ID"></label>
+          <datalist id="known-devices"></datalist>
+          <label>Automation <select name="file"><option value="">All files</option></select></label>
+          <label>Kind <select name="kind">
+            <option value="">All kinds</option>
+            <option value="device.state">State change</option>
+            <option value="device.switch">Switch action</option>
+            <option value="automation.rule">Rule decision</option>
+            <option value="automation.action">Automation action</option>
+            <option value="manual.power">Manual power</option>
+            <option value="manual.light">Manual light</option>
+            <option value="observation.gap">Observation gap</option>
+          </select></label>
+          <label>Outcome <select name="outcome">
+            <option value="">All outcomes</option>
+            <option value="confirmed">Confirmed</option>
+            <option value="failed">Failed</option>
+            <option value="unknown">Unknown</option>
+            <option value="paused">Paused</option>
+            <option value="no_action">No actions</option>
+          </select></label>
+          <button class="primary-button" type="submit">Apply filters</button>
+        </form>
+        <p id="history-error" class="notice" role="alert" hidden></p>
+        <ol id="timeline" class="history-list" aria-live="polite"></ol>
+        <button id="older" class="text-button" type="button" hidden>Older entries</button>
+      </section>
+      <section class="activity-section" aria-labelledby="automations-title">
+        <div class="section-heading">
+          <div><p class="eyebrow">Current configuration</p><h2 id="automations-title">Automations</h2></div>
+          <button id="refresh-automations" class="text-button" type="button">Refresh</button>
+        </div>
+        <p>Pausing a file stops future actions from all its rules. Inputs remain in history. Resuming does not replay missed actions.</p>
+        <p id="automations-error" class="notice" role="alert" hidden></p>
+        <div id="automation-files" class="automation-list" aria-live="polite"></div>
+      </section>
+    </main>
+    <footer class="site-footer"><span>matterctl</span><span>Reported Matter state · Local network</span></footer>
+  </div>
+</body>
+</html>

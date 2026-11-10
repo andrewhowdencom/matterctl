@@ -31,6 +31,18 @@ func addPowerRoutes(mux *http.ServeMux, o options, logger *slog.Logger) {
 			} else {
 				result, err = o.power.Power(ctx, request)
 			}
+			if o.history != nil {
+				outcome, reason := controlOutcome(err)
+				node := result.NodeID
+				var endpoint *uint16
+				if result.Endpoint != 0 {
+					endpoint = &result.Endpoint
+				}
+				o.history.Record(api.HistoryEntry{Kind: "manual.power",
+					Summary: "Power " + request.Action + " for " + request.Target + ": " + reason,
+					NodeID:  node, Endpoint: endpoint, Outcome: outcome,
+					Details: safeControlDetails(request.Target, request.Action)})
+			}
 		}
 		var response any = result
 		if err != nil {

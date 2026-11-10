@@ -17,6 +17,8 @@ See [user documentation](docs/index.md) for connection checks and the API
 reference, and [architecture](ARCHITECTURE.md) for application boundaries.
 See [automation setup](docs/how-to/preview-automations.md) for Starlark rules,
 the BILRESA example, and the preview CLI.
+See [household activity](docs/how-to/inspect-activity.md) for durable history,
+automation status, and file-level pause in the browser and CLI.
 See [SkyConnect Thread setup](docs/how-to/setup-skyconnect-thread.md) for the
 host's OpenThread border router deployment and credential import.
 
@@ -58,6 +60,11 @@ from the LAN. Port 8080 is already used by another service on the target host.
 ./bin/matterctl event watch --output json
 ./bin/matterctl automation check examples/den.star
 ./bin/matterctl automation watch examples/den.star
+./bin/matterctl history list
+./bin/matterctl history follow
+./bin/matterctl automation list
+./bin/matterctl automation pause den-presence.star
+./bin/matterctl automation resume den-presence.star
 ```
 
 ## Configuration
@@ -91,6 +98,7 @@ output: text
 | Ordinary CLI request deadline | `--request.timeout` | `MATTERCTL_REQUEST_TIMEOUT` | `5s` |
 | CLI output | `--output` | `MATTERCTL_OUTPUT` | `text` |
 | Automation files | `--automation.directory` | `MATTERCTL_AUTOMATION_DIRECTORY` | `$XDG_CONFIG_HOME/matterctl/automations` |
+| History database (`serve`) | `--history.path` | `MATTERCTL_HISTORY_PATH` | `$XDG_STATE_HOME/matterctl/history.db` |
 
 For example, `matterctl serve --http.address 127.0.0.1:8081` restricts the
 development server to localhost. Logs go to stderr using `log/slog`.
@@ -115,6 +123,10 @@ restarts `matterctl.service`. Run it again after changes to rebuild and deploy.
 It mounts `${XDG_CONFIG_HOME:-$HOME/.config}/matterctl/automations` read-only
 for service startup. Use `task automation:example` to save the BILRESA scroll
 wheel example, initially bound to Den Light, before installation.
+It also creates and mounts `/var/lib/matterctl` as the only writable container
+directory for history and paused-file state. History is retained indefinitely
+and shown for the last seven days by default. See
+[activity and pause documentation](docs/how-to/inspect-activity.md) for backup.
 The Quadlet's `[Install]` section activates the service at boot; do not run
 `systemctl enable` on the generated unit.
 
@@ -122,6 +134,7 @@ The image runs the binary as UID/GID `65532:65532`, with a read-only filesystem
 and no Linux capabilities. It uses host networking to reach
 Matter Server's loopback-only API at `ws://127.0.0.1:5580/ws`. The installed
 service listens on port 8081. The container filesystem remains read-only.
+The history directory is a dedicated writable mount.
 The browser device list and `/healthz` remain available when Matter Server is
 down; `server info` and `device list` report
 upstream failures and exit nonzero. Event streams report connection changes and

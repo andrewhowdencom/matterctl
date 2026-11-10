@@ -9,10 +9,12 @@ Image=localhost/matterctl:latest
 Pull=never
 Network=host
 ReadOnly=true
+Volume=/var/lib/matterctl:/var/lib/matterctl
 NoNewPrivileges=true
 DropCapability=all
 Environment=MATTERCTL_HTTP_ADDRESS=:8081
 Environment=XDG_CONFIG_HOME=/config
+Environment=MATTERCTL_HISTORY_PATH=/var/lib/matterctl/history.db
 Exec=serve
 
 [Service]

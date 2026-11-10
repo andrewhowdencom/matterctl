@@ -6,7 +6,7 @@ import (
 	"net/http"
 )
 
-//go:embed web/index.html web/app.css web/app.mjs
+//go:embed web/index.html web/app.css web/app.mjs web/history.html web/history.css web/history.mjs
 var webFiles embed.FS
 
 func addWebRoutes(mux *http.ServeMux, logger *slog.Logger) {
@@ -16,6 +16,9 @@ func addWebRoutes(mux *http.ServeMux, logger *slog.Logger) {
 		{"/{$}", "web/index.html", "text/html; charset=utf-8"},
 		{"/app.css", "web/app.css", "text/css; charset=utf-8"},
 		{"/app.mjs", "web/app.mjs", "text/javascript; charset=utf-8"},
+		{"/history", "web/history.html", "text/html; charset=utf-8"},
+		{"/history.css", "web/history.css", "text/css; charset=utf-8"},
+		{"/history.mjs", "web/history.mjs", "text/javascript; charset=utf-8"},
 	} {
 		mux.HandleFunc("GET "+asset.path, func(w http.ResponseWriter, _ *http.Request) {
 			data, err := webFiles.ReadFile(asset.file)

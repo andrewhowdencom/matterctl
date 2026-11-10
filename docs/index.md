@@ -8,6 +8,8 @@ write Matter labels, control on/off state, and watch live changes.
 - [Server information command and API reference](reference/server-info.md)
 - [Inspect devices and watch changes](how-to/inspect-devices.md)
 - [Configure and preview automation rules](how-to/preview-automations.md)
+- [Inspect household activity and pause automations](how-to/inspect-activity.md)
+- [History and automation API reference](reference/activity.md)
 - [View devices in a browser](how-to/view-devices-in-browser.md)
 - [Device inventory and event API reference](reference/devices.md)
 - [Share an existing Matter light](how-to/commission-device.md)

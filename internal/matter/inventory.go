@@ -187,6 +187,9 @@ func (c *Client) publishConfirmedAttribute(session *session, id api.NodeID, endp
 }
 
 func (c *Client) publishLocked(event api.Event) {
+	if c.observe != nil {
+		c.observe(event)
+	}
 	for key, w := range c.watchers {
 		if event.NodeID != "" && w.node != "" && event.NodeID != w.node {
 			continue
@@ -201,6 +204,9 @@ func (c *Client) publishLocked(event api.Event) {
 }
 
 func (c *Client) publishInventoryLocked() {
+	if c.observe != nil {
+		c.observe(newEvent("inventory", "", c.inventoryLocked("")))
+	}
 	for key, w := range c.watchers {
 		event := newEvent("inventory", w.node, c.inventoryLocked(w.node))
 		select {
