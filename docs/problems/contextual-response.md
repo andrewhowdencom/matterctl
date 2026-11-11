@@ -16,14 +16,19 @@ Settling the baby involves dimming lights as a sleep cue and starting music,
 which Google Home currently handles. This is one household outcome spanning
 different devices; it does not require one controller to provide every part.
 
-## Unwanted responses
+For a specific desired behavior, count situations where the needed cue is
+available and the intended outcome occurs. No such behavior has been measured
+against this project yet.
 
-An automatic action at the wrong time would create another interruption. This
-is a risk to test as the house becomes more proactive, not an observed failure
-reported by the owner.
+## More specific problem
 
-## How to assess progress
+- [An automatic light change at the wrong time](unwanted-light-changes.md):
+  Den Light sometimes turns off while the owner is still in the room.
 
-Describe desired situations and observe whether the house responds as intended,
-misses a need, or acts when it should not. Assess the household result, not just
-whether a rule executed.
+## Measures
+
+For each described situation, count intended outcomes reached, needs missed,
+and unwanted responses. Record the time and actions needed to restore a useful
+state after an unwanted response. Assess the household result, not just
+whether a rule executed. No numeric baseline is recorded yet; the Den Light
+surprise is currently described as occasional.

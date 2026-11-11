@@ -43,6 +43,7 @@ type Client struct {
 	observedAt    time.Time
 	watchers      map[uint64]watcher
 	watchSerial   uint64
+	observe       func(api.Event)
 	commissioning atomic.Bool
 	controlling   atomic.Bool
 	labeling      atomic.Bool
@@ -58,6 +59,12 @@ type Option func(*Client)
 
 func WithTracer(tracer trace.Tracer) Option {
 	return func(c *Client) { c.tracer = tracer }
+}
+
+// WithObserver receives every projected event before live-client fanout. The
+// callback must return without blocking; it runs under the inventory lock.
+func WithObserver(observe func(api.Event)) Option {
+	return func(c *Client) { c.observe = observe }
 }
 
 func New(address string, logger *slog.Logger, options ...Option) (*Client, error) {

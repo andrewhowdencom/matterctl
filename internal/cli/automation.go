@@ -19,7 +19,64 @@ import (
 )
 
 func automationCommand(config *viper.Viper) *cobra.Command {
-	command := &cobra.Command{Use: "automation", Short: "Check and preview Starlark automation rules"}
+	command := &cobra.Command{Use: "automation", Short: "Inspect, pause, and preview Starlark automation rules"}
+	command.AddCommand(&cobra.Command{
+		Use: "list", Short: "List loaded automation files and status", Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			service, format, err := configuredClient(config)
+			if err != nil {
+				return err
+			}
+			files, err := service.Automations(cmd.Context())
+			if err != nil {
+				return err
+			}
+			if format == "json" {
+				return printJSON(cmd.OutOrStdout(), files)
+			}
+			if len(files) == 0 {
+				_, err = fmt.Fprintln(cmd.OutOrStdout(), "No automation files loaded.")
+				return err
+			}
+			for _, file := range files {
+				if _, err := fmt.Fprintf(cmd.OutOrStdout(), "%s status=%s rules=%d revision=%s", file.Name, file.Status, file.Rules, file.Revision); err != nil {
+					return err
+				}
+				if file.Error != "" {
+					if _, err := fmt.Fprintf(cmd.OutOrStdout(), " error=%q", file.Error); err != nil {
+						return err
+					}
+				}
+				if _, err := fmt.Fprintln(cmd.OutOrStdout()); err != nil {
+					return err
+				}
+			}
+			return nil
+		},
+	})
+	for _, action := range []struct {
+		name   string
+		paused bool
+	}{{"pause", true}, {"resume", false}} {
+		command.AddCommand(&cobra.Command{
+			Use: action.name + " <file.star>", Short: action.name + " an entire automation file", Args: cobra.ExactArgs(1),
+			RunE: func(cmd *cobra.Command, args []string) error {
+				service, format, err := configuredClient(config)
+				if err != nil {
+					return err
+				}
+				file, err := service.SetAutomationPaused(cmd.Context(), args[0], action.paused)
+				if err != nil {
+					return err
+				}
+				if format == "json" {
+					return printJSON(cmd.OutOrStdout(), file)
+				}
+				_, err = fmt.Fprintf(cmd.OutOrStdout(), "%s: %s\n", file.Name, file.Status)
+				return err
+			},
+		})
+	}
 	command.AddCommand(&cobra.Command{
 		Use: "check [rules.star]", Short: "Check one file or every program in the configured directory", Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

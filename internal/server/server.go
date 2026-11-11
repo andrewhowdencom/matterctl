@@ -26,6 +26,8 @@ type options struct {
 	power         api.PowerSource
 	light         api.LightSource
 	labels        api.LabelSource
+	history       api.HistorySource
+	automations   api.AutomationSource
 	heartbeat     time.Duration
 	tracer        trace.Tracer
 }
@@ -48,6 +50,14 @@ func WithLight(source api.LightSource) Option {
 
 func WithLabels(source api.LabelSource) Option {
 	return func(o *options) { o.labels = source }
+}
+
+func WithHistory(source api.HistorySource) Option {
+	return func(o *options) { o.history = source }
+}
+
+func WithAutomations(source api.AutomationSource) Option {
+	return func(o *options) { o.automations = source }
 }
 
 type Option func(*options)
@@ -122,6 +132,7 @@ func handler(logger *slog.Logger, opts ...Option) http.Handler {
 	addPowerRoutes(mux, options, logger)
 	addLightRoutes(mux, options, logger)
 	addLabelRoutes(mux, options, logger)
+	addActivityRoutes(mux, options, logger)
 	return mux
 }
 

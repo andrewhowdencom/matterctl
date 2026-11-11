@@ -31,6 +31,13 @@ func addLightRoutes(mux *http.ServeMux, o options, logger *slog.Logger) {
 			} else {
 				result, err = o.light.Light(ctx, request)
 			}
+			if o.history != nil {
+				outcome, reason := controlOutcome(err)
+				o.history.Record(api.HistoryEntry{Kind: "manual.light",
+					Summary: "Light " + request.Action + " for " + request.Target + ": " + reason,
+					NodeID:  result.NodeID, Endpoint: &request.Endpoint, Outcome: outcome,
+					Details: safeControlDetails(request.Target, request.Action)})
+			}
 		}
 		var response any = result
 		if err != nil {

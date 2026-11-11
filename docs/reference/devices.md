@@ -125,8 +125,10 @@ service-side `observed_at`, optional string `node_id`, and `data`:
 
 Standard Switch event fields include position and press-count values when
 reported. Other event payloads are omitted; their metadata is still observable.
-There is no durable event history. Upstream events during a disconnection cannot
-be replayed; upstream backpressure can also discard some device events. Cached
+This endpoint is live only; [household history](activity.md) stores selected
+meaningful observations and action outcomes. Upstream events during a
+disconnection cannot be replayed; upstream backpressure can also discard
+some device events. Cached
 state is replaced after reconnect, not inferred from missed events.
 
 The initial snapshot and subscriber registration are atomic. Slow subscribers

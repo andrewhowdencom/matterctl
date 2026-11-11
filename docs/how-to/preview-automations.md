@@ -169,13 +169,13 @@ action fails, later actions in that rule are skipped and earlier actions are
 not rolled back. The live runner checks
 advertised commands and reads back power, level, colour temperature, or hue after
 each command. It does not retry an action with an uncertain outcome or resolve
-conflicting rules. Runtime outcomes appear in the service log. `--output json`
+conflicting rules. Runtime outcomes appear in the service log and
+[household history](inspect-activity.md). `--output json`
 emits one preview firing object per line for further inspection.
 
 If a configured device disappears, its engine stops acting rather than
 retargeting its label to another node. Restart the service after updating the
-rules or commissioning state. If a script fails to load, the service keeps its
-API running but disables all automations and logs the error. `task install`
-checks scripts before restarting the service. The live event stream is not a
-durable history; a recording only contains events observed while `event watch`
-was connected.
+rules or commissioning state. If a script fails to load, that file is marked
+failed while healthy files remain active. `task install` checks scripts before
+restarting the service. The live event stream is not durable; use
+`matterctl history list` for persisted meaningful activity.

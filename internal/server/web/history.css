@@ -1,0 +1,19 @@
+.activity-section { margin: 2rem 0 3rem; }
+.history-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: .75rem; margin: 1.25rem 0; align-items: end; }
+.history-filters label { display: grid; gap: .35rem; font-size: .875rem; }
+.history-filters input, .history-filters select { min-width: 0; padding: .65rem; border: 1px solid #a5a69e; border-radius: .4rem; background: #fff; color: #1e2922; font: inherit; }
+.history-list { padding: 0; list-style: none; }
+.history-list li, .automation-file { margin: .6rem 0; padding: .9rem 1rem; border: 1px solid #d5d6ca; border-radius: .6rem; background: #fff; }
+.history-list summary { cursor: pointer; display: flex; flex-wrap: wrap; gap: .5rem; align-items: baseline; }
+.history-list time { color: #4c5b4e; font-size: .85rem; }
+.history-kind { font-size: .75rem; text-transform: uppercase; letter-spacing: .05em; color: #446b4f; }
+.history-list pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: .85rem; }
+.history-detail { margin-top: .75rem; }
+.history-detail button { margin-top: .6rem; }
+.automation-file { display: flex; justify-content: space-between; gap: 1rem; align-items: center; }
+.automation-file p { margin: .25rem 0; }
+.automation-file small { color: #4c5b4e; }
+.automation-file button { flex-shrink: 0; }
+@media (max-width: 620px) {
+  .automation-file { align-items: flex-start; flex-direction: column; }
+}

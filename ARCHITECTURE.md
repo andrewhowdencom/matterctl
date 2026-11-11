@@ -25,6 +25,7 @@ flowchart LR
 | `internal/server` | HTTP API and embedded browser assets |
 | `internal/matter` | WebSocket session, inventory, capability projection, subscriptions, and commissioning |
 | `internal/automation` | Starlark rule registration, normalized triggers, and action-plan previews |
+| `internal/history` | SQLite history, file-level pause state, and nonblocking projected-event recording |
 | `internal/app` | Adapter construction and coordinated lifetimes |
 
 Cobra and Viper remain at the CLI boundary. The HTTP server depends on the
@@ -39,6 +40,11 @@ remain available for disambiguation. Matter Server owns label persistence.
 The automation engine loads Starlark programs from an XDG config directory at
 service startup. It consumes projected inventory and event frames, normalizes
 occupancy and Switch signals, and evaluates bounded handlers into action plans.
+Files load independently; each has a revision and active, paused, or failed
+status. The pause flag is stored in the history database and checked before
+each action. Paused files still consume inputs to maintain their baseline;
+resuming does not replay actions. If persisted pause state cannot be read at
+startup, no automation runs.
 The Matter adapter executes planned actions through the same session used by
 the API, checking advertised commands and reading back the resulting state.
 CLI `automation watch` and `replay` use the same engine in preview mode and do
@@ -61,6 +67,16 @@ states as stale until a new inventory snapshot is received.
 Its commissioning panel sends a single same-origin JSON request and refreshes
 inventory after the result. Stopping the browser wait cannot establish that
 Matter Server stopped commissioning.
+
+The history page and CLI commands query the same paginated HTTP API. A recorder
+receives projected events before live-client fanout, then writes meaningful
+changes and automation outcomes to SQLite outside the Matter inventory lock.
+The queue is bounded; overflow or a storage write failure is reported as a
+recording gap rather than silently hiding loss. The database is retained
+indefinitely in a dedicated writable mount. It also stores pause state.
+History writes failing after startup do not stop already loaded automations;
+failed pause-state reads at startup disable them. The browser polls for new
+persisted records, while `history follow` does the same through the CLI.
 
 ## Connection lifecycle
 
@@ -125,7 +141,8 @@ Watch registration and its initial snapshot are atomic. Subscribers have queues
 of 64 events; a full queue is closed without blocking the shared reader or other
 subscribers. HTTP sends a terminal `stream_error` when possible. An interrupted
 or truncated stream fails explicitly, and restarting watch obtains a fresh
-snapshot. This is live observation, not durable event history.
+snapshot. This stream is live observation; durable household history uses a
+separate projected-record API.
 
 Streams use NDJSON with 15-second heartbeats. HTTP writes have individual
 ten-second deadlines, cleared during idle periods. CLI establishment uses

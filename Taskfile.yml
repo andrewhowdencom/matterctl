@@ -75,7 +75,7 @@ tasks:
         install -D -m 0644 examples/bilresa-scroll-wheel-lights.star "$automation_dir/bilresa-scroll-wheel-lights.star"
 
   install:
-    desc: Validate, mount XDG automations, install the Quadlet, and restart matterctl
+    desc: Validate, mount automations and history, install the Quadlet, and restart matterctl
     cmds:
       - task: validate
       - |
@@ -90,6 +90,7 @@ tasks:
         install -d -m 0755 "$automation_dir"
         ./bin/matterctl automation check --automation.directory "$automation_dir"
       - task: container:build
+      - sudo install -d -o 65532 -g 65532 -m 0700 /var/lib/matterctl
       - |
         automation_dir="${XDG_CONFIG_HOME:-$HOME/.config}/matterctl/automations"
         generated="$(mktemp)"
