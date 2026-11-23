@@ -30,6 +30,10 @@ no baseline has been recorded.
   the owner needs to discover why Den Light turned off without searching
   service logs.
 
+Diagnosing [an automation affected by a device interruption](switch-control-recovery.md)
+also adds upkeep: an available device can still have an inactive rule, so the
+owner must locate the failed part before restoring control.
+
 ## Measures
 
 Measure the time and steps needed to find the right device, create or change a
