@@ -35,6 +35,12 @@ have a recurring example and consequence, so this remains a candidate problem.
 Once identified, count missed changes per week and the actions needed to
 recover; there is no baseline yet.
 
+## More specific problem
+
+- [A device interruption prevents a needed response](switch-control-recovery.md):
+  a familiar request can produce no physical response, and an automation may
+  remain ineffective after the device returns.
+
 ## Measures
 
 For each recurring situation, count interruptions or repeated actions needed
