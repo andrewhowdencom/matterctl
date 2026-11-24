@@ -221,11 +221,26 @@ export function endpointReadings(endpoint, lastAction, unavailable = false) {
   for (const state of endpoint.states || []) {
     if (["power", "level", "switch_position", "color_temperature"].includes(state.name)) continue;
     if (["occupancy", "temperature", "illuminance", "humidity", "battery"].includes(state.name)) add(state.name[0].toUpperCase() + state.name.slice(1), state.text);
+    if (state.name === "boolean_state") {
+      const types = (endpoint.device_types || []).map((type) => type.id);
+      if (types.includes(21)) add("Contact", state.value ? "Closed" : "Open");
+      else if (types.includes(67)) add("Leak", state.value ? "Detected" : "Clear");
+      else add("Boolean state", state.text);
+    }
   }
   if ((endpoint.server_clusters || []).some((cluster) => cluster.id === 59) || typeof endpoint.switch_position === "number") {
     add("Last action", lastAction?.label || "Waiting for an action");
   }
+  if (!readings.length) {
+    for (const state of (endpoint.states || []).filter((item) => item.raw).slice(0, 3)) {
+      add(`${reportedAttributeName(state.name)} (raw)`, state.text);
+    }
+  }
   return readings;
+}
+
+function reportedAttributeName(name) {
+  return name.replaceAll(".", " · ").replace(/([a-z0-9])([A-Z])/g, "$1 $2");
 }
 
 export function endpointState(endpoint, unavailable = false) {
@@ -438,6 +453,15 @@ function card(device, stale, lastActions, ui, sendControl) {
     block.append(element("p", "", `Type: ${(endpoint.device_types || []).map((type) => type.name || type.id).join(", ") || "Unknown"}`));
     block.append(element("p", "", `Capabilities: ${(endpoint.capabilities || []).join(", ") || "None advertised"}`));
     if (typeof endpoint.switch_position === "number") block.append(element("p", "", `Last reported position: ${endpoint.switch_position}`));
+    const rawStates = (endpoint.states || []).filter((state) => state.raw);
+    if (rawStates.length) {
+      block.append(element("p", "", "Additional reported values (raw Matter values; units and meanings may be unspecified):"));
+      const values = element("dl", "readings detail-readings");
+      for (const state of rawStates) {
+        values.append(element("dt", "", reportedAttributeName(state.name)), element("dd", "", state.text));
+      }
+      block.append(values);
+    }
     for (const label of endpoint.labels || []) block.append(element("p", "", `${label.name}: ${label.value}`));
     for (const tag of endpoint.tags || []) block.append(element("p", "", `Matter tag: ${semanticTagName(tag) || `${tag.namespace}:${tag.tag}`}${tag.label ? ` (${tag.label})` : ""}`));
     details.append(block);

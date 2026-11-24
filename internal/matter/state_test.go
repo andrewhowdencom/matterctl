@@ -24,6 +24,8 @@ func TestStateDecodersNormalizeOnlyKnownValues(t *testing.T) {
 		{"power", clusterOnOff, attributeOnOff, `true`, "power", `true`, "on", "", true},
 		{"level", clusterLevelControl, attributeCurrentLevel, `42`, "level", `42`, "42", "", true},
 		{"switch", clusterSwitch, attributeSwitchCurrentPosition, `1`, "switch_position", `1`, "1", "", true},
+		{"boolean state clear", clusterBooleanState, attributeStateValue, `false`, "boolean_state", `false`, "false", "", true},
+		{"boolean state active", clusterBooleanState, attributeStateValue, `true`, "boolean_state", `true`, "true", "", true},
 		{"illuminance", clusterIlluminanceMeasurement, attributeMeasuredIlluminance, `10001`, "illuminance", `10`, "10.0 lx", "lx", true},
 		{"illuminance below range", clusterIlluminanceMeasurement, attributeMeasuredIlluminance, `0`, "illuminance", `0`, "below measurable range", "lx", true},
 		{"illuminance invalid", clusterIlluminanceMeasurement, attributeMeasuredIlluminance, `65535`, "illuminance", `null`, "unknown", "lx", true},
@@ -54,6 +56,93 @@ func TestStateDecodersNormalizeOnlyKnownValues(t *testing.T) {
 				t.Fatalf("unexpected state: %+v", state)
 			}
 		})
+	}
+}
+
+func TestRawApplicationStateExposesOnlyNamedPrimitiveValues(t *testing.T) {
+	tests := []struct {
+		name      string
+		cluster   uint32
+		attribute uint32
+		raw       string
+		allowed   bool
+	}{
+		{"alarm bitmap", 128, 3, `3`, true},
+		{"measurement range", 1026, 1, `-1000`, true},
+		{"unknown standard attribute", 128, 999, `3`, false},
+		{"global attribute", 128, attributeFeatureMap, `3`, false},
+		{"infrastructure cluster", clusterBasicInformation, 2, `12`, false},
+		{"vendor cluster", 0xFFF10000, 0, `12`, false},
+		{"string", 80, 0, `"private-value"`, false},
+		{"structure", 128, 3, `{"private_key":"must-not-leak"}`, false},
+		{"null", 128, 3, `null`, false},
+		{"invalid", 128, 3, `3 4`, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			state, ok := decodeRawApplicationState(tt.cluster, tt.attribute, json.RawMessage(tt.raw))
+			if ok != tt.allowed {
+				t.Fatalf("decoded=%t, want %t", ok, tt.allowed)
+			}
+			if ok && (!state.Raw || state.Name != attributeName(tt.cluster, tt.attribute) || string(state.Value) != tt.raw || state.Text != tt.raw) {
+				t.Fatalf("incorrect raw value: %+v", state)
+			}
+		})
+	}
+}
+
+func TestBooleanSensorAndRawAlarmUpdatesProjectTogether(t *testing.T) {
+	n := fixtureNode(t, "27", "Leak Sensor")
+	n.EndpointParents[4] = 0
+	n.Attributes["4/29/0"] = json.RawMessage(`[{"deviceType":67,"revision":1}]`)
+	n.Attributes["4/29/1"] = json.RawMessage(`[29,69,128]`)
+	n.Attributes["4/69/0"] = json.RawMessage(`false`)
+	n.Attributes["4/128/3"] = json.RawMessage(`0`)
+	n.Attributes["4/128/65533"] = json.RawMessage(`1`)
+	c := initializedClient(t, n)
+	device, err := c.Inspect(context.Background(), "27")
+	if err != nil {
+		t.Fatal(err)
+	}
+	states := device.Endpoints[4].States
+	if len(states) != 2 || states[0].Name != "boolean_state" || string(states[0].Value) != "false" || states[0].Raw || states[1].Name != "BooleanStateConfiguration.AlarmsActive" || states[1].Text != "0" || !states[1].Raw {
+		t.Fatalf("sensor projection = %+v", states)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	events, err := c.Watch(ctx, "27")
+	if err != nil {
+		t.Fatal(err)
+	}
+	<-events
+	if err := c.applyEvent(c.current, reply{Event: "attribute_updated", Data: json.RawMessage(`[27,"4/128/3",3]`)}); err != nil {
+		t.Fatal(err)
+	}
+	event := <-events
+	var update struct {
+		State *api.State `json:"state"`
+	}
+	if json.Unmarshal(event.Data, &update) != nil || update.State == nil || !update.State.Raw || update.State.Text != "3" {
+		t.Fatalf("raw sensor update = %s", event.Data)
+	}
+}
+
+func TestRawFallbackCoversFutureSensorWithoutAddingLightConfiguration(t *testing.T) {
+	n := fixtureNode(t, "31", "Pressure Sensor")
+	n.Attributes["1/6/16385"] = json.RawMessage(`20`)
+	if states := project(n).Endpoints[1].States; len(states) != 2 {
+		t.Fatalf("ordinary light configuration was exposed: %+v", states)
+	}
+	n.Attributes["1/29/0"] = json.RawMessage(`[{"deviceType":773,"revision":1}]`)
+	n.Attributes["1/29/1"] = json.RawMessage(`[29,1027]`)
+	n.Attributes["1/1027/0"] = json.RawMessage(`1003`)
+	states := project(n).Endpoints[1].States
+	if len(states) != 1 || !states[0].Raw || states[0].Name != "PressureMeasurement.MeasuredValue" || states[0].Text != "1003" {
+		t.Fatalf("standard pressure sensor value was omitted: %+v", states)
+	}
+	n.Attributes["1/1027/0"] = json.RawMessage(`{"invalid":true}`)
+	if states := project(n).Endpoints[1].States; len(states) != 0 {
+		t.Fatalf("structured measurement was exposed: %+v", states)
 	}
 }
 
@@ -127,6 +216,10 @@ func TestSensorStateProjectsAndStreamsWithoutRawAttributes(t *testing.T) {
 	encoded, err := json.Marshal(device)
 	if err != nil || strings.Contains(string(encoded), "must-not-leak") {
 		t.Fatalf("raw attribute leaked through inventory: %s %v", encoded, err)
+	}
+	n.Attributes["5/1026/0"] = json.RawMessage(`-32768`)
+	if states := project(n).Endpoints[5].States; len(states) != 0 {
+		t.Fatalf("invalid interpreted measurement became a raw reading: %+v", states)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

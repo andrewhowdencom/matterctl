@@ -323,6 +323,14 @@ func (c *Client) applyEventLocked(frame reply, publish bool) error {
 			}
 			if decoded, known := decodeState(clusterID, attributeID, update[2]); known {
 				state = &decoded
+			} else {
+				for i := range endpoint.States {
+					candidate := &endpoint.States[i]
+					if candidate.ClusterID == clusterID && candidate.AttributeID == attributeID {
+						state = candidate
+						break
+					}
+				}
 			}
 			break
 		}

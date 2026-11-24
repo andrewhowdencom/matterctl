@@ -17,18 +17,53 @@ type stateDecoder struct {
 	decode      func(json.RawMessage) (any, string, bool)
 }
 
-// Each entry describes one standard attribute, independently of device type.
-// Only decoded scalar values cross the application API boundary.
+// Each entry describes one interpreted standard attribute, independently of
+// device type. Other safe sensor scalars use the marked raw fallback below.
 func builtInStateDecoders() []stateDecoder {
 	return []stateDecoder{
 		{clusterOnOff, attributeOnOff, "power", "", decodePower},
 		{clusterLevelControl, attributeCurrentLevel, "level", "", decodeByte},
 		{clusterSwitch, attributeSwitchCurrentPosition, "switch_position", "", decodeByte},
+		{clusterBooleanState, attributeStateValue, "boolean_state", "", decodeBooleanState},
 		{clusterIlluminanceMeasurement, attributeMeasuredIlluminance, "illuminance", "lx", decodeIlluminance},
 		{clusterTemperatureMeasurement, attributeMeasuredTemperature, "temperature", "°C", decodeTemperature},
 		{clusterRelativeHumidityMeasurement, attributeMeasuredTemperature, "humidity", "%", decodeHumidity},
 		{clusterPowerSource, attributeBatteryPercentRemaining, "battery", "%", decodeBattery},
 		{clusterOccupancySensing, attributeOccupancy, "occupancy", "", decodeOccupancy},
+	}
+}
+
+func decodeBooleanState(raw json.RawMessage) (any, string, bool) {
+	var value bool
+	if json.Unmarshal(raw, &value) != nil {
+		return nil, "", false
+	}
+	return value, fmt.Sprint(value), true
+}
+
+// Unknown application readings retain the standard attribute name and wire
+// scalar. They carry no inferred units or enum meaning. Infrastructure values,
+// vendor attributes, strings, arrays, and structures stay inside the adapter.
+func decodeRawApplicationState(clusterID, attributeID uint32, raw json.RawMessage) (api.State, bool) {
+	if !standardApplicationClusters[clusterID] || attributeID >= 0xFFF8 {
+		return api.State{}, false
+	}
+	raw = bytes.TrimSpace(raw)
+	name := attributeName(clusterID, attributeID)
+	if name == "" || len(raw) > 64 || !json.Valid(raw) {
+		return api.State{}, false
+	}
+	var value any
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	if decoder.Decode(&value) != nil {
+		return api.State{}, false
+	}
+	switch value.(type) {
+	case bool, json.Number:
+		return api.State{ClusterID: clusterID, AttributeID: attributeID, Name: name, Value: append(json.RawMessage(nil), raw...), Text: string(raw), Raw: true}, true
+	default:
+		return api.State{}, false
 	}
 }
 
@@ -72,6 +107,15 @@ func decodeState(clusterID, attributeID uint32, raw json.RawMessage) (api.State,
 		return state, true
 	}
 	return api.State{}, false
+}
+
+func interpretedAttribute(clusterID, attributeID uint32) bool {
+	for _, decoder := range builtInStateDecoders() {
+		if decoder.clusterID == clusterID && decoder.attributeID == attributeID {
+			return true
+		}
+	}
+	return false
 }
 
 func decodePower(raw json.RawMessage) (any, string, bool) {

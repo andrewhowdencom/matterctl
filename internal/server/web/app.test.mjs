@@ -38,6 +38,15 @@ test("device roles and readings use Matter server metadata", () => {
   assert.deepEqual(endpointReadings({ id: 2, states: [{ name: "humidity", text: "46.0%" }, { name: "battery", text: "77.5%" }] }), [
     { name: "Humidity", value: "46.0%" }, { name: "Battery", value: "77.5%" },
   ]);
+  assert.deepEqual(endpointReadings({ id: 1, device_types: [{ id: 67 }], states: [{ name: "boolean_state", value: false, text: "false" }, { name: "BooleanStateConfiguration.AlarmsActive", text: "0", raw: true }] }), [
+    { name: "Leak", value: "Clear" },
+  ]);
+  assert.deepEqual(endpointReadings({ id: 1, device_types: [{ id: 21 }], states: [{ name: "boolean_state", value: false, text: "false" }] }), [
+    { name: "Contact", value: "Open" },
+  ]);
+  assert.deepEqual(endpointReadings({ id: 1, device_types: [{ id: 773 }], states: [{ name: "PressureMeasurement.MeasuredValue", text: "1003", raw: true }] }), [
+    { name: "Pressure Measurement · Measured Value (raw)", value: "1003" },
+  ]);
   assert.equal(switchAction({ event_name: "multi_press_complete", data: { numberOfPressesCounted: 2 } }), "2 presses");
   let state = applyInventory({}, { ready: true, connection: { state: "connected" }, devices: [{ node_id: "2" }] });
   state = applyEvent(state, { type: "node_event", node_id: "2", observed_at: "2026-11-04T12:00:00Z", data: { endpoint_id: 7, cluster_id: 59, event_name: "short_release" } });

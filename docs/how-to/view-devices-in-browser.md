@@ -8,7 +8,10 @@ Home will not appear until it is shared with this controller.
 Each card shows the Matter label when available, a device type, availability,
 and every supported friendly reading for its endpoints. Lights show power,
 brightness, and white temperature when reported. Sensors show occupancy,
-temperature, humidity, illuminance, and battery level when reported. A switch shows its latest action
+temperature, humidity, illuminance, battery level, contact, and leak state when reported.
+When a sensor has no interpreted reading, its card shows up to three named raw
+Boolean or numeric values. **Device details** includes all such raw readings;
+their units and enum meanings may be unknown. A switch shows its latest action
 seen by this browser session; after a reload it waits for the next action.
 Open **Device details** for node and endpoint IDs, advertised capabilities,
 and optional standard Matter endpoint tags. Switches use standard semantic
