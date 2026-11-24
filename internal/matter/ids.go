@@ -13,6 +13,7 @@ const (
 	clusterFixedLabel                  uint32 = 0x0040
 	clusterUserLabel                   uint32 = 0x0041
 	clusterSwitch                      uint32 = 0x003B
+	clusterBooleanState                uint32 = 0x0045
 	clusterDoorLock                    uint32 = 0x0101
 	clusterWindowCovering              uint32 = 0x0102
 	clusterThermostat                  uint32 = 0x0201
@@ -41,6 +42,7 @@ const (
 	attributeMeasuredIlluminance     uint32 = 0x0000
 	attributeMeasuredTemperature     uint32 = 0x0000
 	attributeOccupancy               uint32 = 0x0000
+	attributeStateValue              uint32 = 0x0000
 	attributeDeviceTypeList          uint32 = 0x0000
 	attributeTagList                 uint32 = 0x0004
 	attributeServerList              uint32 = 0x0001

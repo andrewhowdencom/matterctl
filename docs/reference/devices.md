@@ -59,7 +59,7 @@ plus `available`, `is_bridge`, `observed_at`, and `endpoints`. An endpoint has:
 | `capabilities` | Friendly power, brightness, and color actions supported by advertised server-side commands |
 | `power`, `level`, `switch_position` | Selected cached state, omitted when unknown |
 | `color_temperature`, `color_temperature_min`, `color_temperature_max`, `hue`, `saturation`, `color_x`, `color_y`, `color_mode` | Selected cached ColorControl state and physical white range, omitted when unknown; temperature values are Kelvin |
-| `states` | Allowlisted, normalized state values with cluster/attribute IDs, name, JSON scalar value, display text, and optional unit |
+| `states` | Interpreted or marked raw state values with cluster/attribute IDs, name, JSON scalar value, display text, optional unit, and `raw: true` for uninterpreted values |
 
 Clusters expose their ID, a standard name when available, accepted commands,
 attribute/event IDs and optional `attribute_names`/`event_names` maps, and a
@@ -69,16 +69,25 @@ validated feature map when present. Unknown names remain numeric IDs.
 their Matter names, including `Off`, `On`, and `Toggle` for OnOff.
 
 The API projects selected fields rather than returning raw node dumps.
-`states` currently covers OnOff, LevelControl, Switch, IlluminanceMeasurement,
-OccupancySensing, TemperatureMeasurement, RelativeHumidityMeasurement, and
-PowerSource battery percentage values. Occupancy is a Boolean in
+`states` interprets OnOff, LevelControl, Switch, BooleanState,
+IlluminanceMeasurement, OccupancySensing, TemperatureMeasurement,
+RelativeHumidityMeasurement, and PowerSource battery percentage values.
+For Contact Sensor endpoints, the browser shows BooleanState as open/closed;
+for Water Leak Detector endpoints, it shows clear/leak detected.
+Occupancy is a Boolean in
 JSON and `occupied`/`unoccupied` in text. Temperature is converted from
 hundredths of a degree Celsius to degrees Celsius; humidity is converted from
 hundredths of a percent and battery level from half-percent units. Illuminance is converted
 from Matter's logarithmic measurement to lux; zero means below the measurable
-range. Null or invalid values do not appear in
-inventory states. Unselected attribute values, including commissioning/security
-data, are not exposed. Attribute IDs can still be inspected.
+range. On sensor endpoints, the adapter also exposes named Boolean and numeric
+attributes from standard Matter application clusters as `raw: true` states.
+Those values retain their wire form: a number may be an enum, bitmap, scaled
+measurement, or sentinel, so no unit or meaning is inferred. The browser shows
+up to three raw readings on a card when it has no interpreted reading, and all
+raw readings under **Device details**. Null or invalid values do not appear in
+inventory states. Strings, arrays, structures, vendor attributes, infrastructure
+clusters, and root-endpoint fallback values are not exposed. Attribute IDs can
+still be inspected.
 
 ### GET /api/v1/devices/inspect?target=TARGET
 

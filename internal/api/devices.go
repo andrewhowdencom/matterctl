@@ -96,8 +96,9 @@ type SemanticTag struct {
 	Label     string `json:"label,omitempty"`
 }
 
-// State is an allowlisted, normalized attribute value. Value is a JSON scalar;
-// Text is its compact human-readable representation.
+// State is an interpreted or marked raw application attribute. Value is a JSON
+// scalar; Text is its compact display representation. Raw values have no
+// inferred unit or enum meaning.
 type State struct {
 	ClusterID   uint32          `json:"cluster_id"`
 	AttributeID uint32          `json:"attribute_id"`
@@ -105,6 +106,7 @@ type State struct {
 	Value       json.RawMessage `json:"value"`
 	Text        string          `json:"text"`
 	Unit        string          `json:"unit,omitempty"`
+	Raw         bool            `json:"raw,omitempty"`
 }
 
 type DeviceType struct {

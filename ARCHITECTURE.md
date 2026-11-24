@@ -121,15 +121,17 @@ replaces it. Target resolution and inspection reject stale inventory.
 Projection exposes device labels, endpoint parents, device types, server/client
 cluster roles, advertised commands/features, and selected state. Node IDs and
 64-bit event counters/timestamps are strings in the application API. Attribute
-values are limited to identity labels and allowlisted OnOff, LevelControl,
-Switch, OccupancySensing, TemperatureMeasurement, RelativeHumidityMeasurement,
-and PowerSource battery state. The decoder list in
-`internal/matter/state.go` maps cluster and attribute IDs to normalized scalar
-values and display text. Adding another standard state means adding its ID
-constants and decoder; projection and the CLI renderer do not need
-device-specific branches. The advertised device type identifies an endpoint
-but does not determine how an attribute is decoded. Other attributes contribute
-IDs, not their values. Node events
+values are limited to identity labels, interpreted OnOff, LevelControl,
+Switch, BooleanState, OccupancySensing, TemperatureMeasurement,
+RelativeHumidityMeasurement, IlluminanceMeasurement, and PowerSource battery
+state, plus marked raw Boolean and numeric values from named standard application
+clusters on sensor endpoints. The generated catalog identifies application
+clusters; the adapter rejects strings, structures, vendor and infrastructure
+attributes, and global metadata from its raw fallback. The decoder list in
+`internal/matter/state.go` maps interpreted cluster and attribute IDs to
+normalized scalar values and display text. The browser applies device-type
+meaning to BooleanState for contact and leak sensors. Other application sensor
+values retain their raw numbers and lack inferred units or enum names. Node events
 expose metadata and selected standard Switch fields, not arbitrary payloads.
 
 Parent relationships use the upstream `endpoint_parents` when present; a

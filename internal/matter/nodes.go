@@ -252,7 +252,11 @@ func project(n node) api.Device {
 			if !slices.ContainsFunc(endpoint.ServerClusters, func(cluster api.Cluster) bool { return cluster.ID == clusterID }) {
 				continue
 			}
-			if state, known := decodeState(clusterID, attributeID, raw); known && string(state.Value) != "null" {
+			state, known := decodeState(clusterID, attributeID, raw)
+			if !known && !interpretedAttribute(clusterID, attributeID) && id != 0 && isSensorEndpoint(endpoint) {
+				state, known = decodeRawApplicationState(clusterID, attributeID, raw)
+			}
+			if known && string(state.Value) != "null" {
 				endpoint.States = append(endpoint.States, state)
 			}
 		}
@@ -265,6 +269,24 @@ func project(n node) api.Device {
 		device.Endpoints = append(device.Endpoints, endpoint)
 	}
 	return device
+}
+
+func isSensorEndpoint(endpoint api.Endpoint) bool {
+	for _, deviceType := range endpoint.DeviceTypes {
+		name := strings.ToLower(deviceType.Name)
+		if strings.Contains(name, "sensor") || strings.Contains(name, "detector") || strings.Contains(name, "alarm") {
+			return true
+		}
+	}
+	// A controller may omit a recognizable device type while still advertising
+	// a standard sensing cluster.
+	for _, cluster := range endpoint.ServerClusters {
+		name := strings.ToLower(cluster.Name)
+		if strings.Contains(name, "measurement") || strings.Contains(name, "sensing") || name == "booleanstate" || name == "airquality" || name == "smokecoalarm" {
+			return true
+		}
+	}
+	return false
 }
 
 func projectCluster(n node, endpoint uint16, id uint32) api.Cluster {
