@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { applyEvent, applyInventory, beginCommission, commissionOutcome, consumeNDJSON, deviceName, deviceRole, deviceType, endpointName, endpointReadings, endpointState, semanticTagName, submitCommission, switchAction, validCommissionCode, validDeviceName } from "./app.mjs";
+import { applyEvent, applyInventory, beginCommission, commissionOutcome, compactDeviceReadings, consumeNDJSON, deviceName, deviceOverview, deviceRole, deviceType, endpointName, endpointReadings, endpointState, orderedDevices, semanticTagName, submitCommission, switchAction, validCommissionCode, validDeviceName } from "./app.mjs";
 
 const denLight = {
   node_id: "1",
@@ -47,6 +47,30 @@ test("device roles and readings use Matter server metadata", () => {
   assert.deepEqual(endpointReadings({ id: 1, device_types: [{ id: 773 }], states: [{ name: "PressureMeasurement.MeasuredValue", text: "1003", raw: true }] }), [
     { name: "Pressure Measurement · Measured Value (raw)", value: "1003" },
   ]);
+  assert.deepEqual(compactDeviceReadings({ endpoints: [
+    { id: 0, states: [{ name: "battery", text: "77.5%" }] },
+    { id: 1, states: [{ name: "temperature", text: "21.5°C" }] },
+    { id: 2, states: [{ name: "humidity", text: "46.0%" }] },
+  ] }), [
+    { name: "Temperature", value: "21.5°C" },
+    { name: "Humidity", value: "46.0%" },
+    { name: "Battery", value: "77.5%" },
+  ]);
+  assert.deepEqual(compactDeviceReadings({ endpoints: [
+    { id: 1, states: [{ name: "occupancy", text: "occupied" }] },
+  ] }, true), [
+    { name: "Occupancy", value: "Last: occupied" },
+  ]);
+  assert.deepEqual(deviceOverview({ endpoints: [
+    { id: 0, states: [{ name: "battery", text: "38.0%" }] },
+    ...Array.from({ length: 9 }, (_, index) => ({ id: index + 1, server_clusters: [{ id: 59 }], switch_position: 0 })),
+  ] }), ["9 controls", "Battery 38.0%"]);
+  assert.deepEqual(deviceOverview({ endpoints: [
+    { id: 0, states: [{ name: "battery", text: "77.5%" }] },
+    { id: 1, states: [{ name: "temperature", text: "21.5°C" }] },
+    { id: 2, states: [{ name: "humidity", text: "46.0%" }] },
+  ] }), ["Temperature 21.5°C", "Humidity 46.0%", "Battery 77.5%"]);
+  assert.deepEqual(orderedDevices([{ node_id: "2", label: "Zulu" }, { node_id: "1", label: "Alpha" }]).map((device) => device.node_id), ["1", "2"]);
   assert.equal(switchAction({ event_name: "multi_press_complete", data: { numberOfPressesCounted: 2 } }), "2 presses");
   let state = applyInventory({}, { ready: true, connection: { state: "connected" }, devices: [{ node_id: "2" }] });
   state = applyEvent(state, { type: "node_event", node_id: "2", observed_at: "2026-11-04T12:00:00Z", data: { endpoint_id: 7, cluster_id: 59, event_name: "short_release" } });

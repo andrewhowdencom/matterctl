@@ -239,6 +239,27 @@ export function endpointReadings(endpoint, lastAction, unavailable = false) {
   return readings;
 }
 
+export function compactDeviceReadings(device, unavailable = false) {
+  return (device.endpoints || [])
+    .flatMap((endpoint) => endpointReadings(endpoint, undefined, unavailable))
+    .sort((left, right) => Number(left.name === "Battery") - Number(right.name === "Battery"));
+}
+
+export function deviceOverview(device, unavailable = false) {
+  const readings = compactDeviceReadings(device, unavailable);
+  if (deviceRole(device) === "switch") {
+    const controls = (device.endpoints || []).filter((endpoint) => endpoint.id !== 0 &&
+      ((endpoint.server_clusters || []).some((cluster) => cluster.id === 59) || typeof endpoint.switch_position === "number")).length;
+    const battery = readings.find((reading) => reading.name === "Battery");
+    return [controls ? `${controls} control${controls === 1 ? "" : "s"}` : "", battery ? `Battery ${battery.value}` : ""].filter(Boolean);
+  }
+  return readings.slice(0, 3).map((reading) => `${reading.name} ${reading.value}`);
+}
+
+export function orderedDevices(devices) {
+  return [...devices].sort((left, right) => deviceName(left).localeCompare(deviceName(right), undefined, { numeric: true, sensitivity: "base" }));
+}
+
 function reportedAttributeName(name) {
   return name.replaceAll(".", " · ").replace(/([a-z0-9])([A-Z])/g, "$1 $2");
 }
@@ -333,19 +354,27 @@ function actionMessage(result, response) {
   return { kind: "error", message: "The device did not accept the command." };
 }
 
-function card(device, stale, lastActions, ui, sendControl) {
-  const offline = device.available === false;
-  const unavailable = stale || offline;
-  const article = element("article", `device-card${unavailable ? " is-stale" : ""}`);
-  article.dataset.nodeId = device.node_id;
-  const top = element("div", "card-top");
-  const role = deviceRole(device);
+function deviceIcon(role) {
   const icon = element("span", `device-icon icon-${role}`);
   icon.setAttribute("aria-hidden", "true");
   icon.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${icons[role]}</svg>`;
-  const availability = element("span", `availability${stale ? " stale" : offline ? " offline" : ""}`,
+  return icon;
+}
+
+function availabilityLabel(device, stale) {
+  const offline = device.available === false;
+  return element("span", `availability${stale ? " stale" : offline ? " offline" : ""}`,
     stale ? (offline ? "Offline · stale" : "Data stale") : offline ? "Offline" : "Available");
-  top.append(icon, availability);
+}
+
+function focusCard(device, stale, lastActions, ui, sendControl) {
+  const offline = device.available === false;
+  const unavailable = stale || offline;
+  const role = deviceRole(device);
+  const article = element("article", `device-card role-${role}${unavailable ? " is-stale" : ""}`);
+  article.dataset.nodeId = device.node_id;
+  const top = element("div", "card-top");
+  top.append(deviceIcon(role), availabilityLabel(device, stale));
   article.append(top, element("h3", "device-name", deviceName(device)), element("p", "device-type", deviceType(device)));
 
   const list = element("div", "endpoint-list");
@@ -353,6 +382,19 @@ function card(device, stale, lastActions, ui, sendControl) {
     typeof endpoint.power === "boolean" || typeof endpoint.switch_position === "number" || (endpoint.states || []).length);
   if (!endpoints.length) {
     list.append(element("div", "endpoint-row", "No reported state"));
+  } else if (role === "sensor") {
+    const readings = compactDeviceReadings({ ...device, endpoints }, unavailable);
+    if (!readings.length) {
+      list.append(element("p", "no-state", "No reported state"));
+    } else {
+      const values = element("dl", "sensor-readings");
+      for (const reading of readings) {
+        const item = element("div", "sensor-reading");
+        item.append(element("dt", "", reading.name), element("dd", "", reading.value));
+        values.append(item);
+      }
+      list.append(values);
+    }
   } else {
     for (const endpoint of endpoints) {
       const row = element("section", "endpoint-row");
@@ -470,6 +512,23 @@ function card(device, stale, lastActions, ui, sendControl) {
   return article;
 }
 
+function deviceRow(device, stale, selected, select) {
+  const unavailable = stale || device.available === false;
+  const button = element("button", `device-row${selected ? " is-selected" : ""}${unavailable ? " is-stale" : ""}`);
+  button.type = "button";
+  button.dataset.nodeId = device.node_id;
+  button.setAttribute("aria-pressed", String(selected));
+  button.addEventListener("click", () => select(device.node_id));
+  const copy = element("span", "device-row-copy");
+  copy.append(element("span", "device-row-name", deviceName(device)));
+  const overview = deviceOverview(device, unavailable);
+  copy.append(element("span", "device-row-summary", overview.join(" · ") || deviceType(device)));
+  const status = element("span", "device-row-status");
+  status.append(availabilityLabel(device, stale));
+  button.append(deviceIcon(deviceRole(device)), copy, status);
+  return button;
+}
+
 function matterColor(endpoint) {
   if ((endpoint.color_mode === 1 || typeof endpoint.hue !== "number") && typeof endpoint.color_x === "number" && typeof endpoint.color_y === "number") {
     const x = endpoint.color_x / 65535;
@@ -531,18 +590,49 @@ function render(state, ui, sendControl) {
   } else if (!devices.length) {
     grid.replaceChildren(emptyState("No devices yet", "No devices are commissioned to this Matter controller."));
   } else {
-    const ordered = [...devices].sort((a, b) => {
-      const left = BigInt(a.node_id);
-      const right = BigInt(b.node_id);
-      return left < right ? -1 : left > right ? 1 : 0;
-    });
-    grid.replaceChildren(...ordered.map((device) => card(device, stale, state.lastActions || {}, ui, sendControl)));
+    const listScrollTop = grid.querySelector(".device-list-panel")?.scrollTop || 0;
+    const ordered = orderedDevices(devices);
+    const selected = ordered.find((device) => device.node_id === ui.selectedNodeID);
+    const browser = element("div", `device-browser${selected ? " has-selection" : ""}`);
+    const listPanel = element("div", "device-list-panel");
+    listPanel.setAttribute("aria-label", "Devices");
+    const list = element("div", "device-list");
+    const setSelection = (nodeID, focusTarget) => {
+      ui.selectedNodeID = nodeID;
+      const url = new URL(window.location.href);
+      if (nodeID) url.searchParams.set("device", nodeID); else url.searchParams.delete("device");
+      window.history.replaceState(null, "", url);
+      render(state, ui, sendControl);
+      queueMicrotask(() => document.querySelector(focusTarget)?.focus());
+    };
+    for (const device of ordered) {
+      list.append(deviceRow(device, stale, device === selected, (nodeID) => setSelection(nodeID, ".device-focus-title")));
+    }
+    listPanel.append(list);
+
+    const focusPanel = element("div", "device-focus-panel");
+    if (selected) {
+      const back = element("button", "device-back", "Back to devices");
+      back.type = "button";
+      back.addEventListener("click", () => setSelection(null, `[data-node-id="${selected.node_id}"]`));
+      const focusedCard = focusCard(selected, stale, state.lastActions || {}, ui, sendControl);
+      const title = focusedCard.querySelector(".device-name");
+      title.classList.add("device-focus-title");
+      title.tabIndex = -1;
+      focusPanel.append(back, focusedCard);
+    } else {
+      focusPanel.append(emptyState("Select a device", "Choose a device from the list to inspect its state, controls, and Matter details."));
+    }
+    browser.append(listPanel, focusPanel);
+    grid.replaceChildren(browser);
+    listPanel.scrollTop = listScrollTop;
   }
 }
 
 async function start() {
   let state = initialState();
-  const ui = { open: new Set(), pending: {}, feedback: {}, drafts: {}, activeControl: null, deferredRender: false };
+  const selectedNodeID = new URL(window.location.href).searchParams.get("device");
+  const ui = { open: new Set(), pending: {}, feedback: {}, drafts: {}, activeControl: null, deferredRender: false, selectedNodeID };
   let closed = false;
   let commissionPending = false;
   let commissionedNodeID = null;
